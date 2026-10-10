@@ -19,7 +19,7 @@ globalThis.socketlib = { registerModule:module=>{assert.equal(module,'rp-frame')
 };}};
 const nativeInterval = globalThis.setInterval;
 globalThis.setInterval = callback => {timer=callback;return 1;};
-const runtime = await import('../rp-frame.mjs');
+const runtime = await import('../main.mjs');
 runtime.registerSettings();
 runtime.registerSocket();
 game.ready=true;
@@ -104,7 +104,7 @@ test('manifest requires only socketlib and recommends StoryFrame; no legacy impo
   assert.equal(manifest.title,'RP Frame');
   assert.deepEqual(manifest.relationships.requires.map(item=>item.id),['socketlib']);
   assert.deepEqual(manifest.relationships.recommends.map(item=>item.id),['storyframe']);
-  const source=await readFile(new URL('../rp-frame.mjs',import.meta.url),'utf8');
+  const source=await readFile(new URL('../main.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(source,/from\s+['"][^'"]*raise-my-hand/);
 });
 

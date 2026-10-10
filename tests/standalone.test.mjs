@@ -25,7 +25,7 @@ for (const scenario of ['absent', 'disabled']) {
       globalThis.ui = { controls: { render: async () => {} }, notifications: { warn: () => {}, error: error => errors.push(error) } };
       globalThis.socketlib = { registerModule: () => ({ register: () => {}, executeForOthers: (...args) => outbound.push(args) }) };
       globalThis.setInterval = () => 1;
-      const runtime = await import(`../rp-frame.mjs?standalone=${scenario}`);
+      const runtime = await import(`../main.mjs?standalone=${scenario}`);
       runtime.registerSettings();
       runtime.registerSocket();
       game.ready = true;

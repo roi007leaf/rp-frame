@@ -71,7 +71,7 @@ addEventListener('keydown', event => {
 });
 addEventListener('storage',showStory);
 showStory();
-await import('../../rp-frame.mjs');
+await import('../../main.mjs');
 Hooks.callAll('init');
 Hooks.callAll('socketlib.ready');
 if(id==='gm' && params.get('delay')) await new Promise(resolve=>setTimeout(resolve,Number(params.get('delay'))));

@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "authors": [{ "name": "RoiLeaf" }],
   "compatibility": { "minimum": "13", "verified": "14" },
-  "esmodules": ["rp-frame.mjs"],
+  "esmodules": ["main.mjs"],
   "styles": ["styles/rp-frame.css"],
   "socket": true,
   "relationships": {
