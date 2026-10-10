@@ -1,0 +1,19 @@
+{
+  "id": "rp-frame",
+  "title": "RP Frame",
+  "description": "GM-approved roleplay scenes and speaking queues, with optional StoryFrame spotlight integration.",
+  "version": "0.1.0",
+  "authors": [{ "name": "RoiLeaf" }],
+  "compatibility": { "minimum": "13", "verified": "14" },
+  "esmodules": ["rp-frame.mjs"],
+  "styles": ["styles/rp-frame.css"],
+  "socket": true,
+  "relationships": {
+    "requires": [
+      { "id": "socketlib", "type": "module" }
+    ],
+    "recommends": [
+      { "id": "storyframe", "type": "module" }
+    ]
+  }
+}

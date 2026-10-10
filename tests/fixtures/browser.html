@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RP Frame browser test</title>
+<link rel="stylesheet" href="../../styles/rp-frame.css">
+<style>
+body{margin:0;background:radial-gradient(ellipse at 35% 35%,#223c32,#0b1512 70%);color:#eaf1e9;font:16px system-ui;min-height:100vh}header.test-header{position:absolute;bottom:30px;left:90px;padding:20px;background:#15251eee;border-radius:10px}header.test-header h1{margin:0 0 10px;font-size:23px}#tools{position:absolute;top:170px;left:90px;display:flex;flex-direction:column;gap:8px;align-items:start}#notice{color:#ddba58;max-width:500px}#players-active{position:absolute;bottom:30px;right:30px}#players-active li{list-style:none;padding:8px;background:#15251e}.test-caption{color:#a5b9ac;margin:8px 0}
+</style>
+<nav id="tools" aria-label="Token controls"></nav>
+<header class="test-header"><h1>RP Frame browser test</h1><p id="role"></p><p class="test-caption">Production module · isolated test world</p><p id="sf-spotlight"></p><p id="notice" role="alert"></p></header>
+<ul id="players-active"><li data-user-id="p1"><span class="player-name">Celdar</span></li><li data-user-id="p2"><span class="player-name">Ed</span></li></ul>
+<script type="module">
+const params = new URLSearchParams(location.search);
+const role = params.get('role') || 'gm';
+const room = params.get('room') || 'default';
+const id = role === 'gm' ? 'gm' : role === 'p2' ? 'p2' : 'p1';
+const icon = color => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect width="80" height="80" fill="#143026"/><circle cx="40" cy="28" r="15" fill="${color}"/><path d="M10 80Q10 45 40 45Q70 45 70 80" fill="${color}"/></svg>`)}`;
+const users = new Map([
+  ['gm',{id:'gm',name:'Test GM',isGM:true,active:true}],
+  ['p1',{id:'p1',name:'Anna',isGM:false,active:true,character:{uuid:'Actor.p1',name:'Celdar Stoneplow',img:icon('#c4a266')}}],
+  ['p2',{id:'p2',name:'Ben',isGM:false,active:true,character:{uuid:'Actor.p2',name:'Ed Carver',img:icon('#739ea4')}}]
+]);
+users.activeGM = users.get('gm'); // Intentionally stays logged in while its module socket reloads.
+const hooks = new Map();
+window.Hooks = {
+  on(name,callback){const list=hooks.get(name)||[];list.push(callback);hooks.set(name,list);},
+  once(name,callback){this.on(name,callback);},
+  callAll(name,...args){for(const callback of hooks.get(name)||[]) callback(...args);}
+};
+const defaults = new Map();
+const keybindings = new Map();
+const key = name => `rp-frame-test:${room}:${name}`;
+const storyDefault = {activeSpeaker:'narrator',speakers:[{id:'narrator',label:'Narrator'},{id:'sf-p1',actorUuid:'Actor.p1'},{id:'sf-p2',actorUuid:'Actor.p2'}]};
+const readStory = () => JSON.parse(localStorage.getItem(key('story')) || JSON.stringify(storyDefault));
+const showStory = () => {document.querySelector('#sf-spotlight').textContent = `StoryFrame spotlight: ${readStory().activeSpeaker || 'narration'}`;};
+window.game = {
+  ready:false,user:users.get(id),users,combats:[],scenes:{current:{id:'test-scene'}},
+  modules:new Map([['storyframe',{active:true}],['rp-frame',{active:true}]]),
+  keybindings:{register(module,name,data){if(module!=='rp-frame')throw Error('Unexpected keybinding namespace');keybindings.set(name,data);}},
+  settings:{
+    register(module,name,data){defaults.set(name,data);},
+    get(module,name){const saved=localStorage.getItem(key(`${defaults.get(name)?.scope === 'client' ? id+':' : ''}${name}`));return saved === null ? structuredClone(defaults.get(name)?.default) : JSON.parse(saved);},
+    async set(module,name,data){localStorage.setItem(key(`${defaults.get(name)?.scope === 'client' ? id+':' : ''}${name}`),JSON.stringify(data));defaults.get(name)?.onChange?.(data);return data;}
+  },
+  storyframe:{stateManager:{getState:readStory,async setActiveSpeaker(speaker){const state=readStory();state.activeSpeaker=speaker;localStorage.setItem(key('story'),JSON.stringify(state));showStory();}}}
+};
+const handlers = new Map();
+const channel = new BroadcastChannel(`rp-frame-test:${room}`);
+const dispatch = message => {if(message.targets === 'gms' && !game.user.isGM)return;if(Array.isArray(message.targets) && !message.targets.includes(id))return;Promise.resolve(handlers.get(message.handler)?.call({socketdata:{userId:message.sender}},...message.args)).catch(console.error);};
+const send = (handler,targets,args) => {const message={handler,targets,args,sender:id};channel.postMessage(message);return Promise.resolve();};
+channel.onmessage = event => dispatch(event.data);
+window.socketlib = {registerModule(module){if(module!=='rp-frame')throw Error('Unexpected socket namespace');return {
+  register(name,callback){handlers.set(name,callback);},
+  executeForAllGMs(handler,...args){return send(handler,'gms',args);},
+  executeForOthers(handler,...args){return send(handler,'others',args);},
+  executeForUsers(handler,targets,...args){return send(handler,targets,args);}
+};}};
+window.ui = {
+  notifications:{warn:message=>{document.querySelector('#notice').textContent=message;},error:message=>{document.querySelector('#notice').textContent=message;console.error(message);}},
+  controls:{async render(){const controls={tokens:{tools:{}}};Hooks.callAll('getSceneControlButtons',controls);const nav=document.querySelector('#tools');nav.replaceChildren();for(const tool of Object.values(controls.tokens.tools)){if(!tool.visible)continue;const button=document.createElement('button');button.className='rp-frame-button';button.textContent=tool.title;button.addEventListener('click',event=>{tool.onChange?.(event,true);tool.onClick?.(true);});nav.append(button);}}}
+};
+document.querySelector('#role').textContent = id === 'gm' ? 'GM — approve and manage the scene' : `${users.get(id).character.name} — player`;
+addEventListener('keydown', event => {
+  if (event.target.closest('input, textarea, select, [contenteditable]')) return;
+  for (const binding of keybindings.values()) {
+    if (binding.editable.some(({key,modifiers}) => key === event.code && event.shiftKey === modifiers.includes('Shift') && !event.ctrlKey && !event.altKey && !event.metaKey)) {
+      if (binding.onDown({event})) { event.preventDefault(); break; }
+    }
+  }
+});
+addEventListener('storage',showStory);
+showStory();
+await import('../../rp-frame.mjs');
+Hooks.callAll('init');
+Hooks.callAll('socketlib.ready');
+if(id==='gm' && params.get('delay')) await new Promise(resolve=>setTimeout(resolve,Number(params.get('delay'))));
+game.ready=true;
+Hooks.callAll('ready');
+</script>
+</html>

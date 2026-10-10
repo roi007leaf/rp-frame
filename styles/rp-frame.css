@@ -1,0 +1,46 @@
+.rp-frame-banner {
+  --rp-frame-green: #51cf66;
+  --rp-frame-gold: #ffd43b;
+  --rp-frame-red: #ff0000;
+  --rp-frame-color: var(--rp-frame-green);
+  --rp-frame-scale: 1;
+  position: fixed; z-index: 2147483647; top: 28px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; flex-wrap: wrap; gap: calc(12px * var(--rp-frame-scale));
+  min-height: 68px; max-width: min(880px, 94vw);
+  padding: calc(12px * var(--rp-frame-scale)) calc(20px * var(--rp-frame-scale)); box-sizing: border-box;
+  color: #ecfff1; background: rgba(8, 14, 12, .86);
+  border: 1px solid color-mix(in srgb, var(--rp-frame-color) 45%, transparent); border-radius: 8px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--rp-frame-color) 18%, transparent), 0 14px 44px -12px color-mix(in srgb, var(--rp-frame-color) 45%, transparent), 0 8px 24px #0009;
+  font-family: var(--font-primary); pointer-events: auto; cursor: move; user-select: none; touch-action: none;
+}
+.rp-frame-banner[data-tone="request"] { --rp-frame-color: var(--rp-frame-gold); }
+.rp-frame-banner.is-positioned { transform: none; }
+.rp-frame-banner.is-sized { max-width: 94vw; }
+.rp-frame-text { font-size: calc(20px * var(--rp-frame-scale)); font-weight: 700; line-height: 1.2; text-shadow: 0 0 18px color-mix(in srgb, var(--rp-frame-color) 60%, transparent); }
+.rp-frame-avatar {
+  width: calc(42px * var(--rp-frame-scale)); height: calc(42px * var(--rp-frame-scale)); flex: 0 0 calc(42px * var(--rp-frame-scale)); box-sizing: content-box;
+  border-radius: 50%; object-fit: cover; object-position: top; background: color-mix(in srgb, var(--rp-frame-color) 24%, transparent);
+  border: 2px solid color-mix(in srgb, var(--rp-frame-color) 70%, transparent); box-shadow: 0 0 16px color-mix(in srgb, var(--rp-frame-color) 50%, transparent);
+}
+.rp-frame-avatar[hidden] { display: none; }
+.rp-frame-queue { display: flex; align-items: center; flex-wrap: wrap; gap: calc(6px * var(--rp-frame-scale)); margin-left: 4px; }
+.rp-frame-chip {
+  display: inline-grid; grid-template-columns: calc(18px * var(--rp-frame-scale)) minmax(0, auto); align-items: center; justify-items: center; gap: calc(6px * var(--rp-frame-scale));
+  width: auto; height: calc(36px * var(--rp-frame-scale)); max-width: calc(180px * var(--rp-frame-scale)); margin: 0; padding: 0 calc(10px * var(--rp-frame-scale)); box-sizing: content-box;
+  color: #ecfff1; background: color-mix(in srgb, var(--rp-frame-gold) 14%, transparent); border: 1px solid color-mix(in srgb, var(--rp-frame-gold) 55%, transparent); border-radius: 8px;
+  font-family: inherit; font-size: calc(13px * var(--rp-frame-scale)); font-weight: 700; line-height: 1; box-shadow: none; white-space: nowrap;
+}
+.rp-frame-chip:disabled { opacity: 1; cursor: default; }
+.rp-frame-chip:not(:disabled) { cursor: pointer; }
+.rp-frame-chip:not(:disabled):hover, .rp-frame-chip:focus-visible { border-color: color-mix(in srgb, var(--rp-frame-green) 70%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--rp-frame-green) 28%, transparent); outline: none; }
+.rp-frame-chip.urgent { background: color-mix(in srgb, var(--rp-frame-red) 18%, transparent); border-color: color-mix(in srgb, var(--rp-frame-red) 65%, transparent); }
+.rp-frame-chip > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.rp-frame-position { display: inline-grid; place-items: center; width: calc(18px * var(--rp-frame-scale)); height: calc(18px * var(--rp-frame-scale)); background: #ffffff29; border-radius: 50%; font-size: calc(11px * var(--rp-frame-scale)); line-height: 1; }
+.rp-frame-resize {
+  position: absolute; bottom: 4px; right: 4px; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none;
+  background: linear-gradient(135deg, transparent 0 45%, #ecfff18c 46% 52%, transparent 53%), linear-gradient(135deg, transparent 0 62%, #ecfff159 63% 69%, transparent 70%); cursor: nwse-resize;
+}
+.rp-frame-badge { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: 5px; padding: 0 4px; border: 1px solid #ffd43b; border-radius: 6px; color: #fff7db; background: #28271b; font-weight: 700; }
+.rp-frame-badge.speaking { background: #153925; border-color: #51cf66; color: #51cf66; }
+.rp-frame-badge.urgent { background: #401d23; border-color: #ff0000; color: #ffb5b9; }
+.camera-view > .rp-frame-badge { position: absolute; z-index: 5; top: 6px; left: 6px; margin: 0; pointer-events: none; }
