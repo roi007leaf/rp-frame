@@ -58,3 +58,6 @@
 .rp-frame-avatar-buttons { display: flex; gap: 6px; width: 100%; }
 .rp-frame-avatar-buttons button { flex: 1; }
 .rp-frame-avatar-buttons .rp-frame-primary { background: #153925; border-color: #51cf66; color: #e8ffe9; }
+/* Align-portrait button: top-right under the status icons, shown on hover like Foundry's controls. */
+.camera-view > .rp-frame-avatar-btn { position: absolute; z-index: 6; top: 34px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .15s; }
+.camera-view:hover > .rp-frame-avatar-btn, .camera-view > .rp-frame-avatar-btn:focus-visible { opacity: 1; }

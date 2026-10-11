@@ -27,15 +27,15 @@ function decorateCameras() {
     if (!user) continue;
     const img = tile.querySelector('img.user-avatar');
     if (img) applyFrame(img, getFrame(user));
-    const bar = tile.querySelector('.control-bar.left');
-    if (!bar || bar.querySelector('.rp-frame-avatar-btn') || !canEditFrame(game.user, user)) continue;
+    // Own corner button: Foundry's left control bar is already full on small tiles and clips extras.
+    if (tile.querySelector(':scope > .rp-frame-avatar-btn') || !canEditFrame(game.user, user)) continue;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'av-control ui-control icon fa-solid fa-fw fa-crop-simple rp-frame-avatar-btn';
+    button.className = 'ui-control icon fa-solid fa-fw fa-crop-simple rp-frame-avatar-btn';
     button.dataset.tooltip = 'Align camera portrait';
     button.setAttribute('aria-label', 'Align camera portrait');
     button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); openFrameEditor(user); });
-    bar.append(button);
+    tile.append(button);
   }
 }
 
