@@ -4,6 +4,8 @@ import { SceneView } from './scripts/view.mjs';
 import { StoryframeLink } from './scripts/storyframe-link.mjs';
 import { registerRpKeybindings } from './scripts/keybindings.mjs';
 import { SpeakerHighlight, createPixiRing, drawPixiRing } from './scripts/speaker-highlight.mjs';
+import { applyFrame, canEditFrame, getFrame } from './scripts/avatar-frame.mjs';
+import { openFrameEditor } from './scripts/avatar-frame-app.mjs';
 
 export const MODULE_ID = 'rp-frame';
 let socket, controller, connection, view, spotlight, highlight, pollTimer;
@@ -18,7 +20,27 @@ const setting = key => game.settings.get(MODULE_ID, key);
 const sender = context => context?.socketdata?.userId;
 const packet = () => ({ session, ready: Boolean(controller?.ready && isAuthority()), state: controller?.state });
 
+/** Apply saved portrait framing to camera tiles and add the align button where allowed. */
+function decorateCameras() {
+  for (const tile of document.querySelectorAll?.('.camera-view[data-user]') ?? []) {
+    const user = game.users?.get(tile.dataset.user);
+    if (!user) continue;
+    const img = tile.querySelector('img.user-avatar');
+    if (img) applyFrame(img, getFrame(user));
+    const bar = tile.querySelector('.control-bar.left');
+    if (!bar || bar.querySelector('.rp-frame-avatar-btn') || !canEditFrame(game.user, user)) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'av-control ui-control icon fa-solid fa-fw fa-crop-simple rp-frame-avatar-btn';
+    button.dataset.tooltip = 'Align camera portrait';
+    button.setAttribute('aria-label', 'Align camera portrait');
+    button.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); openFrameEditor(user); });
+    bar.append(button);
+  }
+}
+
 function refresh() {
+  decorateCameras();
   if (!controller) return;
   view?.render(controller.state);
   highlight?.sync(controller.state);
