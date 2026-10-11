@@ -3,9 +3,10 @@ import { GmConnection } from './scripts/gm-connection.mjs';
 import { SceneView } from './scripts/view.mjs';
 import { StoryframeLink } from './scripts/storyframe-link.mjs';
 import { registerRpKeybindings } from './scripts/keybindings.mjs';
+import { SpeakerHighlight, createPixiRing, drawPixiRing } from './scripts/speaker-highlight.mjs';
 
 export const MODULE_ID = 'rp-frame';
-let socket, controller, connection, view, spotlight, pollTimer;
+let socket, controller, connection, view, spotlight, highlight, pollTimer;
 const session = Date.now() + Math.random();
 let initialized = false;
 const isAuthority = () => game.user?.isGM && game.users.activeGM?.id === game.user.id;
@@ -20,6 +21,7 @@ const packet = () => ({ session, ready: Boolean(controller?.ready && isAuthority
 function refresh() {
   if (!controller) return;
   view?.render(controller.state);
+  highlight?.sync(controller.state);
   void ui.controls?.render?.({ reset: true });
 }
 
@@ -36,6 +38,7 @@ export function registerSettings() {
   register('layout', { scope: 'client', config: false, type: Object, default: {} });
   register('banner', { name: 'RP Frame: speaker banner', hint: 'Show the active speaker and queue. Drag to move, use the corner to resize.', scope: 'client', config: true, type: Boolean, default: true, onChange: refresh });
   register('badges', { name: 'RP Frame: player and camera badges', scope: 'client', config: true, type: Boolean, default: true, onChange: refresh });
+  register('tokenHighlight', { name: 'RP Frame: highlight speaker token', hint: 'Draw a green ring around the speaking player\'s character tokens.', scope: 'client', config: true, type: Boolean, default: true, onChange: refresh });
   register('linkSpotlight', { name: 'RP Frame: follow StoryFrame spotlight', hint: 'When optional StoryFrame is enabled, highlight existing speakers matching each player character. Restore the previous spotlight when the RP scene ends.', scope: 'world', config: true, type: Boolean, default: true, onChange: () => { if (controller) void spotlight?.sync(controller.state); } });
   register('stopForCombat', { name: 'RP Frame: end scene when combat starts', scope: 'world', config: true, type: Boolean, default: true });
 }
@@ -114,6 +117,10 @@ export async function initialize() {
     command, showBanner: () => setting('banner'), showBadges: () => setting('badges'),
     layout: () => setting('layout'), saveLayout: data => game.settings.set(MODULE_ID, 'layout', data)
   });
+  highlight = new SpeakerHighlight({
+    tokens: () => globalThis.canvas?.tokens?.placeables ?? [], users: () => game.users,
+    enabled: () => setting('tokenHighlight'), createRing: createPixiRing, drawRing: drawPixiRing
+  });
   controller = new SceneController({
     isAuthority, isPlayer, inCombat: () => setting('stopForCombat') && inCombat(), now: () => Date.now(),
     load: () => setting('scene'), save: data => game.settings.set(MODULE_ID, 'scene', data),
@@ -178,6 +185,9 @@ Hooks.once('ready', initialize);
 Hooks.on('getSceneControlButtons', tokenControls);
 for (const hook of ['renderPlayers', 'renderCameraViews', 'renderCameraPopout', 'canvasReady']) Hooks.on(hook, refresh);
 Hooks.on('updateUser', refresh);
+Hooks.on('canvasTearDown', () => highlight?.reset());
+Hooks.on('refreshToken', token => highlight?.redraw(token));
+Hooks.on('createToken', () => refresh());
 Hooks.on('userConnected', () => {
   if (!controller?.ready) return;
   if (!isAuthority()) controller.authority = false;

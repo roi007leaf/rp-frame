@@ -132,6 +132,7 @@ export class SceneView {
 
   badges(state) {
     document.querySelectorAll('.rp-frame-badge').forEach(node => node.remove());
+    document.querySelectorAll('.camera-view.rp-frame-speaking').forEach(node => node.classList.remove('rp-frame-speaking'));
     if (!this.host.showBadges()) return;
     for (const container of document.querySelectorAll('.camera-view, #players [data-user-id], #players-active [data-user-id], #players-inactive [data-user-id]')) {
       const id = container.dataset.user || container.dataset.userId;
@@ -142,6 +143,7 @@ export class SceneView {
       badge.title = speaking ? 'Speaking' : urgent ? 'Urgent speak' : 'RP queue';
       badge.setAttribute('aria-label', badge.title);
       (container.querySelector('.player-name') ?? container).append(badge);
+      if (speaking && container.classList.contains('camera-view')) container.classList.add('rp-frame-speaking');
     }
   }
 }
