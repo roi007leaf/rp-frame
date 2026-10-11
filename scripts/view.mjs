@@ -142,8 +142,11 @@ export class SceneView {
       const badge = element('span', `rp-frame-badge${speaking ? ' speaking' : urgent ? ' urgent' : ''}`, speaking ? '●' : urgent ? '!' : String(waitingOrder(state).indexOf(id) + 1));
       badge.title = speaking ? 'Speaking' : urgent ? 'Urgent speak' : 'RP queue';
       badge.setAttribute('aria-label', badge.title);
-      (container.querySelector('.player-name') ?? container).append(badge);
-      if (speaking && container.classList.contains('camera-view')) container.classList.add('rp-frame-speaking');
+      // Cameras: pin the badge to the video's corner (CSS .camera-view > .rp-frame-badge) instead of
+      // inside the name label, where it overlapped the player's name. Player list: after the name.
+      const isCamera = container.classList.contains('camera-view');
+      (isCamera ? container : container.querySelector('.player-name') ?? container).append(badge);
+      if (speaking && isCamera) container.classList.add('rp-frame-speaking');
     }
   }
 }
