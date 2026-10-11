@@ -43,5 +43,6 @@
 .rp-frame-badge { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: 5px; padding: 0 4px; border: 1px solid #ffd43b; border-radius: 6px; color: #fff7db; background: #28271b; font-weight: 700; }
 .rp-frame-badge.speaking { background: #153925; border-color: #51cf66; color: #51cf66; }
 .rp-frame-badge.urgent { background: #401d23; border-color: #ff0000; color: #ffb5b9; }
-.camera-view > .rp-frame-badge { position: absolute; z-index: 5; top: 6px; left: 6px; margin: 0; pointer-events: none; }
+/* Bottom-right, stacked above Foundry's connection dot (top-left holds the camera controls). */
+.camera-view > .rp-frame-badge { position: absolute; z-index: 5; right: 6px; bottom: 32px; margin: 0; pointer-events: none; }
 .camera-view.rp-frame-speaking { outline: 3px solid #51cf66; outline-offset: -3px; box-shadow: 0 0 16px 4px rgb(81 207 102 / 55%); transition: box-shadow .25s, outline-color .25s; }
