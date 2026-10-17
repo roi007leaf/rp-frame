@@ -11,7 +11,8 @@ import { VoiceRoster } from './scripts/voice-roster.mjs';
 import { browserVoiceMic } from './scripts/voice-mic.mjs';
 import { VoiceService } from './scripts/voice-service.mjs';
 import { VoiceGlow, createPixiGlow, drawPixiGlow, fadeGlow, applyVoiceCameras, voiceGlowIds, glowStyle, normalizeAppearances, DEFAULT_APPEARANCES } from './scripts/voice-glow.mjs';
-import { voiceSettingsApp, refreshVoiceSettings } from './scripts/voice-settings-app.mjs';
+import { voiceSettingsApp, refreshVoiceSettings, refreshVoiceMeter } from './scripts/voice-settings-app.mjs';
+import { PushToTalk, PTT_MOUSE } from './scripts/voice-ptt.mjs';
 
 export const MODULE_ID = 'rp-frame';
 let socket, controller, connection, view, spotlight, highlight, pollTimer, voice, voiceGlow, appearances = normalizeAppearances();
@@ -28,6 +29,11 @@ const sender = context => context?.socketdata?.userId;
 const updateVoice = () => voice?.update().catch(report);
 const CONSENT_HTML = '<p>Your GM turned on voice glow: your character\'s token glows while you talk.</p><p>Foundry will listen to your mic\'s <strong>volume level only</strong>. Nothing is recorded or sent; only "talking / not talking" is shared.</p>';
 const packet = () => ({ session, ready: Boolean(controller?.ready && isAuthority()), state: controller?.state });
+// Push-to-talk: with voicePtt on, voice glow needs the talk key or mouse button held as well as speech.
+const ptt = new PushToTalk({ onChange: () => { voice?.refreshGate(); refreshVoiceMeter(); } });
+// DOM events can arrive before init registers the setting.
+const pttOn = () => { try { return Boolean(setting('voicePtt')); } catch { return false; } };
+const voiceGate = () => !pttOn() || ptt.held;
 
 /** Apply saved portrait framing to camera tiles and add the align button where allowed. */
 function decorateCameras() {
@@ -114,7 +120,10 @@ export function registerSettings() {
   register('voiceConsent', { scope: 'client', config: false, type: Boolean, default: false });
   register('voiceThreshold', { scope: 'client', config: false, type: Number, default: DEFAULT_THRESHOLD_DB });
   register('voiceAppearance', { scope: 'client', config: false, type: Object, default: structuredClone(DEFAULT_APPEARANCES), onChange: applyAppearance });
-  const voiceApp = voiceSettingsApp({ onAppearance: applyAppearance });
+  register('voicePtt', { scope: 'client', config: false, type: Boolean, default: false, onChange: () => { voice?.refreshGate(); refreshVoiceSettings(); } });
+  register('voicePttMouse', { scope: 'client', config: false, type: String, default: 'none', onChange: value => { ptt.mouse = value; refreshVoiceSettings(); } });
+  ptt.mouse = setting('voicePttMouse');
+  const voiceApp = voiceSettingsApp({ onAppearance: applyAppearance, gate: voiceGate });
   if (voiceApp) game.settings.registerMenu(MODULE_ID, 'voiceSettings', { name: 'RP Frame: voice glow', label: 'Open', hint: 'Turn voice glow on for the table (GM), set up your mic, and choose how the glow looks on your screen.', icon: 'fa-solid fa-microphone-lines', restricted: false, type: voiceApp });
   applyAppearance(setting('voiceAppearance'));
 }
@@ -124,6 +133,14 @@ export function registerKeybindings() {
     register: (id, data) => game.keybindings.register(MODULE_ID, id, data),
     context: () => ({ state: controller?.state, user: game.user, ready: controller?.ready, combat: setting('stopForCombat') && inCombat() }),
     command
+  });
+  // No default key: players pick the same one as their voice app. Returning false leaves the key unconsumed.
+  game.keybindings.register(MODULE_ID, 'voicePushToTalk', {
+    name: 'RP Frame: push-to-talk',
+    hint: 'Hold while talking when voice glow push-to-talk is on. Use the same key as your voice app.',
+    editable: [], repeat: false,
+    onDown: () => { ptt.keyDown(); return false; },
+    onUp: () => { ptt.keyUp(); return false; }
   });
 }
 
@@ -219,7 +236,7 @@ export async function initialize() {
     })),
     setOptOut: value => game.settings.set(MODULE_ID, 'voiceOptOut', value),
     setConsent: () => game.settings.set(MODULE_ID, 'voiceConsent', true),
-    threshold: () => setting('voiceThreshold'), mic: browserVoiceMic(),
+    threshold: () => setting('voiceThreshold'), gate: voiceGate, mic: browserVoiceMic(),
     // Local transitions re-render so the speaker sees their own glow.
     send: payload => { socket.executeForOthers('voice', payload); renderVoice(); },
     now: () => Date.now(), setInterval: (fn, ms) => globalThis.setInterval(fn, ms), clearInterval: id => globalThis.clearInterval(id)
@@ -307,6 +324,24 @@ Hooks.on('userConnected', (user, isConnected) => {
 Hooks.on('updateCombat', combat => {
   if (combat.started && setting('stopForCombat') && isAuthority()) void command('end');
 });
+// Push-to-talk mouse button: tracked on the window in capture so canvas or sheet handlers can't hide it.
+// mousedown/mouseup too: a second button pressed while another is down fires no pointerdown/pointerup.
+const pttButton = event => pttOn() && event.button === PTT_MOUSE[ptt.mouse];
+const capture = { capture: true };
+for (const type of ['pointerdown', 'mousedown']) globalThis.addEventListener?.(type, event => ptt.pointerDown(event.button), capture);
+for (const type of ['pointerup', 'mouseup', 'auxclick']) {
+  globalThis.addEventListener?.(type, event => {
+    if (type !== 'auxclick') ptt.pointerUp(event.button);
+    // Keep the browser's Back/Forward from firing on the talk button.
+    if (pttButton(event)) event.preventDefault();
+  }, capture);
+}
+// Foundry skips keybindings while a text field has focus, so a key released there would stay held.
+const pttKeys = () => { try { return game.keybindings.get(MODULE_ID, 'voicePushToTalk').map(binding => binding.key); } catch { return []; } };
+globalThis.addEventListener?.('keyup', event => { if (pttKeys().includes(event.code)) ptt.keyUp(); }, capture);
+// Up events never arrive while Foundry is unfocused or hidden.
+globalThis.addEventListener?.('blur', () => ptt.release());
+globalThis.document?.addEventListener?.('visibilitychange', () => { if (document.visibilityState === 'hidden') ptt.release(); });
 globalThis.addEventListener?.('pagehide', () => {
   globalThis.clearInterval(pollTimer);
   voice?.stop();

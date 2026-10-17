@@ -4,6 +4,8 @@ import { HEARTBEAT_MS, MIC } from './voice-roster.mjs';
 /**
  * Runs the local mic while voice glow is enabled and this player has consented,
  * broadcasting only {talking, mic} through host.send.
+ * Optional host.gate() (push-to-talk) must also be true for talking: only this effective state
+ * is ever reported or sent, never the raw detector state.
  */
 export class VoiceService {
   #host;
@@ -14,6 +16,8 @@ export class VoiceService {
   #heartbeat = null;
   #pending = null;
   #stops = 0;
+  // Effective talking: detector talking and the gate open; the only talking state that is sent.
+  #talking = false;
 
   constructor(host) {
     this.#host = host;
@@ -24,7 +28,7 @@ export class VoiceService {
   }
 
   get talking() {
-    return this.#detector.talking;
+    return this.#talking;
   }
 
   get mic() {
@@ -38,6 +42,11 @@ export class VoiceService {
 
   announce() {
     this.#send();
+  }
+
+  /** Re-check host.gate() (push-to-talk pressed or released); sends right away on a change. */
+  refreshGate() {
+    this.#sync();
   }
 
   stop() {
@@ -79,10 +88,16 @@ export class VoiceService {
   #level(db) {
     const host = this.#host;
     this.#detector.threshold = host.threshold() ?? DEFAULT_THRESHOLD_DB;
-    const talking = this.#detector.sample(db, host.now());
-    if (talking === null) return;
+    if (this.#detector.sample(db, host.now()) !== null) this.#sync();
+  }
+
+  /** Recompute effective talking; on a change, send it and start or stop the heartbeat. */
+  #sync() {
+    const talking = this.#detector.talking && (this.#host.gate?.() ?? true);
+    if (talking === this.#talking) return;
+    this.#talking = talking;
     this.#clearHeartbeat();
-    if (talking) this.#heartbeat = host.setInterval(() => this.#send(), HEARTBEAT_MS);
+    if (talking) this.#heartbeat = this.#host.setInterval(() => this.#send(), HEARTBEAT_MS);
     this.#send();
   }
 
@@ -92,7 +107,8 @@ export class VoiceService {
 
   /** Close the mic and set status; sends talking:false only if we were talking. Returns whether it sent. */
   #halt(status) {
-    const wasTalking = this.talking;
+    const wasTalking = this.#talking;
+    this.#talking = false;
     this.#clearHeartbeat();
     this.#status = status;
     this.#running = false;

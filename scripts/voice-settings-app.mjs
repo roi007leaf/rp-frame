@@ -7,6 +7,8 @@ const MIN_DB = -80, MAX_DB = -10;
 const SLIDERS = [['size', 'Size'], ['brightness', 'Brightness'], ['opacity', 'Opacity']];
 // Token and camera glow each have their own appearance controls, preview and reset.
 const PARTS = [['token', 'Token glow'], ['camera', 'Camera glow']];
+// voicePttMouse values (see PTT_MOUSE in voice-ptt.mjs) and their labels.
+const PTT_OPTIONS = [['none', 'None'], ['back', 'Mouse 4 (Back)'], ['forward', 'Mouse 5 (Forward)']];
 const MIC_MESSAGES = {
   denied: 'Microphone access was blocked. Allow it in your browser to see the meter.',
   unavailable: 'No microphone available.',
@@ -22,6 +24,8 @@ const savedAppearances = () => normalizeAppearances(get('voiceAppearance'));
 export const tableStatus = on => on ? 'Voice glow is on for this table.' : 'Voice glow is off. Your GM can turn it on.';
 /** Label of the button that starts or stops the window's own mic test. */
 export const testLabel = testing => testing ? 'Stop test' : 'Test mic';
+/** Test mic meter is green while testing, the detector says talking and the push-to-talk gate is open. */
+export const meterTalking = (running, talking, open) => running && talking && open;
 
 /**
  * The window's Test mic: each run gets a fresh mic, so overlapping getUserMedia calls that resolve
@@ -59,18 +63,29 @@ export class MicTest {
 const open = new Set();
 /** Refresh the Table status and the checkboxes of any open voice glow window. */
 export function refreshVoiceSettings() {
-  for (const app of open) app.paintSettings();
+  for (const app of open) {
+    app.paintSettings();
+    app.paint();
+  }
+}
+/** Repaint the Test mic meter of any open voice glow window (push-to-talk pressed or released). */
+export function refreshVoiceMeter() {
+  for (const app of open) app.paint();
 }
 
 let apply = () => {};
+let gate = () => true;
 let AppClass;
 /**
- * The single voice glow window: Table (world switch), My mic (opt-in, test meter, threshold),
+ * The single voice glow window: Table (world switch), My mic (opt-in, push-to-talk, test meter, threshold),
  * What I see (show, then token and camera glow appearance).
- * Every call sets `onAppearance`, which shows `{ token, camera }` appearances live without saving; the cached class reads it at use time.
+ * Every call sets `onAppearance`, which shows `{ token, camera }` appearances live without saving, and
+ * `gate`, false while push-to-talk is on and not held (the Test mic meter then stays grey);
+ * the cached class reads both at use time.
  */
-export function voiceSettingsApp({ onAppearance } = {}) {
+export function voiceSettingsApp({ onAppearance, gate: pttGate } = {}) {
   if (onAppearance) apply = onAppearance;
+  if (pttGate) gate = pttGate;
   if (AppClass) return AppClass;
   const Base = globalThis.foundry?.applications?.api?.ApplicationV2;
   if (!Base) return null;
@@ -132,6 +147,10 @@ export function voiceSettingsApp({ onAppearance } = {}) {
         <section class="rp-frame-voice-section" data-section="mic">
           <h3>My mic</h3>
           <label class="rp-frame-voice-check"><input type="checkbox" data-setting="voiceUse"> Use my mic for voice glow</label>
+          <label class="rp-frame-voice-check"><input type="checkbox" data-setting="voicePtt"> Push-to-talk: glow only while I hold my talk key</label>
+          <label class="rp-frame-voice-threshold">Mouse button
+            <select data-setting="voicePttMouse">${PTT_OPTIONS.map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select></label>
+          <p class="rp-frame-voice-hint">Set a keyboard key in Configure Controls → RP Frame: push-to-talk.</p>
           <p class="rp-frame-voice-hint">Press Test mic and talk normally: the bar should turn green while you speak and stay grey when you're quiet. Only levels are measured; nothing is recorded or sent.</p>
           <div class="rp-frame-voice-meter" aria-hidden="true"><div class="rp-frame-voice-level"></div><div class="rp-frame-voice-marker"></div></div>
           <p class="rp-frame-voice-note" data-role="message" hidden></p>
@@ -168,6 +187,8 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       on('input[data-setting=voiceGlow]', 'change', event => void set('voiceGlow', event.target.checked));
       // My mic: the checkbox is the inverse of voiceOptOut.
       on('input[data-setting=voiceUse]', 'change', event => void set('voiceOptOut', !event.target.checked));
+      on('input[data-setting=voicePtt]', 'change', event => void set('voicePtt', event.target.checked));
+      on('select[data-setting=voicePttMouse]', 'change', event => void set('voicePttMouse', event.target.value));
       const slider = root.querySelector('input[data-role=threshold]');
       const saveThreshold = () => set('voiceThreshold', this.detector.threshold);
       slider.addEventListener('input', () => this.setThreshold(Number(slider.value)));
@@ -234,6 +255,11 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       if (!root) return;
       root.querySelector('input[data-setting=voiceUse]').checked = !get('voiceOptOut');
       root.querySelector('input[data-setting=voiceShow]').checked = Boolean(get('voiceShow'));
+      const ptt = Boolean(get('voicePtt'));
+      root.querySelector('input[data-setting=voicePtt]').checked = ptt;
+      const mouse = root.querySelector('select[data-setting=voicePttMouse]');
+      mouse.value = get('voicePttMouse');
+      mouse.disabled = !ptt;
       const enabled = Boolean(get('voiceGlow'));
       const box = root.querySelector('input[data-setting=voiceGlow]');
       if (box) box.checked = enabled;
@@ -251,7 +277,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       root.querySelector('output[data-role=threshold]').textContent = `${value} dB`;
       root.querySelector('.rp-frame-voice-level').style.width = `${percent(this.level)}%`;
       root.querySelector('.rp-frame-voice-marker').style.left = `${percent(value)}%`;
-      root.querySelector('.rp-frame-voice-meter').classList.toggle('talking', this.micTest.running && this.detector.talking);
+      root.querySelector('.rp-frame-voice-meter').classList.toggle('talking', meterTalking(this.micTest.running, this.detector.talking, gate()));
       root.querySelector('[data-act=test] span').textContent = testLabel(this.micTest.running);
       const message = root.querySelector('[data-role=message]');
       message.textContent = this.message;

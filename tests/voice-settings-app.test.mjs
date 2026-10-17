@@ -68,3 +68,11 @@ test('a throwing mic start counts as unavailable', async () => {
   assert.equal(await tester.start(() => {}, () => {}), 'unavailable');
   assert.equal(tester.running, false);
 });
+
+test('Test mic meter is green only while testing, talking and the push-to-talk gate is open', async () => {
+  const { meterTalking } = await import('../scripts/voice-settings-app.mjs');
+  assert.equal(meterTalking(true, true, true), true);
+  assert.equal(meterTalking(true, true, false), false);
+  assert.equal(meterTalking(true, false, true), false);
+  assert.equal(meterTalking(false, true, true), false);
+});

@@ -12,7 +12,9 @@ const cssVars = new Map();
 globalThis.document = { body:null, documentElement:{ style:{ setProperty:(name,value)=>cssVars.set(name,value) } }, querySelectorAll:selector=>selector==='.camera-view[data-user]' ? cameras : [],
   createElement:()=>({dataset:{},setAttribute(){},addEventListener(){}}) };
 // No mic in this environment: voice glow must stay quiet rather than throw.
-Object.defineProperty(globalThis,'navigator',{value:{},configurable:true,writable:true});
+// The voice service reads mediaDevices once at startup; a test can swap in a working getUserMedia.
+let getUserMedia = async () => { throw { name:'NotFoundError' }; };
+Object.defineProperty(globalThis,'navigator',{value:{mediaDevices:{getUserMedia:constraints=>getUserMedia(constraints)}},configurable:true,writable:true});
 globalThis.foundry = { applications:{ api:{ ApplicationV2:class {} } } };
 globalThis.game = {
   ready:false, user:users.get('gm'), users, combats:[],scenes:{current:{id:'scene'}},
@@ -25,6 +27,10 @@ globalThis.ui = {controls:{render:async()=>{}},notifications:{warn:()=>{},error:
 globalThis.socketlib = { registerModule:module=>{assert.equal(module,'rp-frame');return {
   register:(name,fn)=>handlers.set(name,fn),executeForOthers:(...args)=>outbound.push(args),executeForAllGMs:(...args)=>outbound.push(args),executeForUsers:(...args)=>outbound.push(args)
 };}};
+// main.mjs listens on the window (globalThis) for push-to-talk mouse buttons, blur and keyup.
+const win = new EventTarget();
+globalThis.addEventListener = win.addEventListener.bind(win);
+globalThis.dispatchEvent = win.dispatchEvent.bind(win);
 const nativeInterval = globalThis.setInterval;
 globalThis.setInterval = callback => {timer=callback;return 1;};
 const runtime = await import('../main.mjs');
@@ -122,7 +128,7 @@ test('init registers original shortcuts under RP Frame namespace; GM Space uses 
     assert.equal(module, 'rp-frame'); bindings.set(id, data);
   } };
   hooks.get('init')();
-  assert.equal(bindings.size, 4);
+  assert.equal(bindings.size, 5);
   await runtime.command('join', 'a');
   assert.equal(bindings.get('snatch-spotlight').onDown({ event: { repeat: false } }), true);
   // The callback must return synchronously while the serialized save completes.
@@ -278,4 +284,119 @@ test('parts are independent: token glow uses the token color, camera var the cam
   delete users.get('player').character;
   delete globalThis.canvas;
   delete globalThis.PIXI;
+});
+
+test('push-to-talk settings and keybinding are registered', () => {
+  const ptt = settings.get('voicePtt'), mouse = settings.get('voicePttMouse');
+  assert.equal(ptt.scope,'client');
+  assert.equal(ptt.config,false);
+  assert.equal(ptt.type,Boolean);
+  assert.equal(ptt.default,false);
+  assert.equal(typeof ptt.onChange,'function');
+  assert.equal(mouse.scope,'client');
+  assert.equal(mouse.config,false);
+  assert.equal(mouse.type,String);
+  assert.equal(mouse.default,'none');
+  assert.equal(typeof mouse.onChange,'function');
+  const bindings = new Map();
+  game.keybindings = { register: (_module, id, data) => bindings.set(id, data) };
+  runtime.registerKeybindings();
+  const binding = bindings.get('voicePushToTalk');
+  assert.ok(binding);
+  assert.equal(binding.name,'RP Frame: push-to-talk');
+  assert.equal(binding.hint,'Hold while talking when voice glow push-to-talk is on. Use the same key as your voice app.');
+  assert.deepEqual(binding.editable,[]);
+  assert.equal(binding.repeat,false);
+  assert.equal(typeof binding.onDown,'function');
+  assert.equal(typeof binding.onUp,'function');
+});
+
+/** Mouse event stand-in: Node has no MouseEvent, so add the button to a cancelable Event. */
+function mouseEvent(type, button) {
+  const event = new Event(type, { cancelable: true });
+  Object.defineProperty(event, 'button', { value: button });
+  return event;
+}
+
+test('push-to-talk mouse button: Back/Forward default is prevented only while PTT is on', () => {
+  values.set('voicePttMouse','back');
+  settings.get('voicePttMouse').onChange('back');
+  values.set('voicePtt',false);
+  let event = mouseEvent('mouseup', 3);
+  globalThis.dispatchEvent(event);
+  assert.equal(event.defaultPrevented,false);
+  values.set('voicePtt',true);
+  for (const type of ['mouseup','auxclick','pointerup']) {
+    event = mouseEvent(type, 3);
+    globalThis.dispatchEvent(event);
+    assert.equal(event.defaultPrevented,true,type);
+  }
+  event = mouseEvent('mouseup', 4);
+  globalThis.dispatchEvent(event);
+  assert.equal(event.defaultPrevented,false);
+  values.set('voicePttMouse','none');
+  settings.get('voicePttMouse').onChange('none');
+  event = mouseEvent('mouseup', 3);
+  globalThis.dispatchEvent(event);
+  assert.equal(event.defaultPrevented,false);
+  values.delete('voicePtt');
+  values.delete('voicePttMouse');
+});
+
+test('push-to-talk: holding the bound key while loud sends talking, releasing (or blur) stops it', async () => {
+  // A fake browser mic whose level timer and clock the test drives.
+  const intervals = new Map();
+  let nextId = 100, now = 0;
+  const realNow = Date.now, realSet = globalThis.setInterval, realClear = globalThis.clearInterval, realAudio = globalThis.AudioContext;
+  globalThis.setInterval = (fn, ms) => { intervals.set(++nextId, { fn, ms }); return nextId; };
+  globalThis.clearInterval = id => intervals.delete(id);
+  Date.now = () => now;
+  const noMic = getUserMedia;
+  getUserMedia = async () => ({ getTracks: () => [{ addEventListener(){}, stop(){} }] });
+  globalThis.AudioContext = class {
+    state = 'running';
+    createMediaStreamSource() { return { connect(){} }; }
+    createAnalyser() { return { fftSize: 256, getFloatTimeDomainData: buf => buf.fill(0.1), connect(){} }; }
+    async close() { this.state = 'closed'; }
+  };
+  const bindings = new Map();
+  game.keybindings = { register: (_module, id, data) => bindings.set(id, data) };
+  runtime.registerKeybindings();
+  const key = bindings.get('voicePushToTalk');
+  const voices = () => outbound.filter(args => args[0] === 'voice').map(args => args[1]);
+  const tick = () => { now += 50; for (const { fn, ms } of [...intervals.values()]) if (ms === 50) fn(); };
+  try {
+    values.set('voiceConsent',true);
+    values.set('voicePtt',true);
+    values.set('voiceGlow',true);
+    settings.get('voiceGlow').onChange(true);
+    for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(voices().at(-1),{talking:false,mic:'ok'});
+    const before = voices().length;
+    for (let i = 0; i < 6; i++) tick();
+    assert.equal(voices().length,before,'loud without the key sends nothing');
+    assert.equal(key.onDown({ event: {} }),false);
+    assert.deepEqual(voices().slice(before),[{talking:true,mic:'ok'}]);
+    assert.equal(key.onUp({ event: {} }),false);
+    assert.deepEqual(voices().slice(before),[{talking:true,mic:'ok'},{talking:false,mic:'ok'}]);
+    key.onDown({ event: {} });
+    globalThis.dispatchEvent(new Event('blur'));
+    assert.deepEqual(voices().slice(before + 2),[{talking:true,mic:'ok'},{talking:false,mic:'ok'}]);
+    key.onDown({ event: {} });
+    values.set('voicePtt',false);
+    settings.get('voicePtt').onChange(false);
+    tick();
+    assert.equal(voices().at(-1).talking,true,'PTT off: plain voice glow');
+  } finally {
+    values.set('voiceGlow',false);
+    settings.get('voiceGlow').onChange(false);
+    for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+    key.onUp({ event: {} });
+    for (const name of ['voiceGlow','voicePtt','voiceConsent']) values.delete(name);
+    getUserMedia = noMic;
+    Date.now = realNow;
+    globalThis.setInterval = realSet;
+    globalThis.clearInterval = realClear;
+    globalThis.AudioContext = realAudio;
+  }
 });

@@ -28,8 +28,10 @@ The window has three sections, and every control saves as soon as you change it:
 - **Privacy:** each player's browser measures its own mic *volume level* locally. No audio is sent, recorded or stored; only "talking / not talking" and a mic status are shared.
 - **Consent:** the first time it's enabled, each player is asked before the mic is used. **No thanks** opts that player out.
 - **Muted mics:** GMs see a muted-mic mark on the cameras of players whose mic is off, blocked or unavailable.
-- **Push-to-talk:** voice glow listens to the mic directly, so it reacts to speech even when your voice chat push-to-talk key is up, and Foundry's own A/V mute doesn't silence it. Opt out if that's a problem.
+- **Voice chat mute:** voice glow listens to the mic directly, so Foundry's own A/V mute doesn't silence it. If you use push-to-talk in your voice app, turn on push-to-talk below; otherwise opt out if that's a problem.
 - **Background tabs:** browsers throttle timers in hidden or fully covered tabs, so detection gets coarse (late or missed glows) while Foundry isn't visible.
+
+**Push-to-talk:** if you use push-to-talk in Discord or another voice app, turn on **Push-to-talk: glow only while I hold my talk key** under My mic. You then glow only while you hold your talk key or mouse button *and* your mic is above the threshold, like Discord's own indicator. Set the same key as your voice app in **Configure Controls → RP Frame: push-to-talk** (no default), or pick **Mouse 4 (Back)** or **Mouse 5 (Forward)** under **Mouse button**; that button then doesn't trigger the browser's Back/Forward in Foundry. Foundry must be focused to see your key or button, so you won't glow while alt-tabbed to another window. **Test mic** follows the same rule while push-to-talk is on.
 
 ## StoryFrame integration
 

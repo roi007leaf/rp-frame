@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a push-to-talk mode for voice glow (**Push-to-talk: glow only while I hold my talk key** under My mic): you glow only while you hold your talk key and your mic is above the threshold. Bind the key in **Configure Controls → RP Frame: push-to-talk**, or use Mouse 4 (Back) or Mouse 5 (Forward), which then no longer navigate the browser. Releasing the key, or leaving Foundry's window, stops the glow right away.
+
 ## 0.2.0 (prerelease)
 
 - Add optional voice glow: while the GM enables it, talking players' character tokens and camera tiles glow green. Each browser measures only its own mic level locally; only talking / not talking is shared, never audio. Includes player consent, opt-out, a per-client show toggle, a sensitivity meter, a per-client glow appearance window (color, size, brightness, opacity), and a GM-only muted-mic mark.

@@ -367,3 +367,75 @@ test('opt-out during consent dialog never opens the mic', async () => {
   assert.equal(audio.calls, 0);
   assert.equal(service.status, 'off');
 });
+
+async function gatedSetup() {
+  const s = setup({ consented: true });
+  s.gate = { open: false };
+  s.host.gate = () => s.gate.open;
+  await s.service.update();
+  s.sent.length = 0;
+  return s;
+}
+
+test('gate closed: loud audio sends nothing and talking is false', async () => {
+  const { service, audio, clock, sent } = await gatedSetup();
+  audio.level = LOUD;
+  clock.advance(3500);
+  assert.deepEqual(sent, []);
+  assert.equal(service.talking, false);
+  service.announce();
+  assert.deepEqual(sent, [{ talking: false, mic: 'ok' }]);
+});
+
+test('opening the gate while loud sends talking:true right away and heartbeats', async () => {
+  const { service, audio, clock, sent, gate } = await gatedSetup();
+  audio.level = LOUD;
+  clock.advance(200);
+  gate.open = true;
+  service.refreshGate();
+  assert.deepEqual(sent, [{ talking: true, mic: 'ok' }]);
+  assert.equal(service.talking, true);
+  clock.advance(3000);
+  assert.deepEqual(sent, [{ talking: true, mic: 'ok' }, { talking: true, mic: 'ok' }]);
+});
+
+test('closing the gate while talking sends talking:false right away and stops the heartbeat', async () => {
+  const { service, audio, clock, sent, gate } = await gatedSetup();
+  gate.open = true;
+  service.refreshGate();
+  assert.deepEqual(sent, []);
+  audio.level = LOUD;
+  clock.advance(200);
+  assert.deepEqual(sent, [{ talking: true, mic: 'ok' }]);
+  gate.open = false;
+  service.refreshGate();
+  assert.deepEqual(sent, [{ talking: true, mic: 'ok' }, { talking: false, mic: 'ok' }]);
+  assert.equal(service.talking, false);
+  clock.advance(3000);
+  assert.equal(sent.length, 2);
+  service.refreshGate();
+  assert.equal(sent.length, 2);
+});
+
+test('gate open, then quiet: the detector linger still ends talking', async () => {
+  const { service, audio, clock, sent, gate } = await gatedSetup();
+  gate.open = true;
+  audio.level = LOUD;
+  clock.advance(200);
+  audio.level = QUIET;
+  clock.advance(600);
+  assert.deepEqual(sent, [{ talking: true, mic: 'ok' }, { talking: false, mic: 'ok' }]);
+  assert.equal(service.talking, false);
+});
+
+test('halt while gated talking sends one talking:false', async () => {
+  const { service, audio, clock, sent, gate, state } = await gatedSetup();
+  gate.open = true;
+  audio.level = LOUD;
+  clock.advance(200);
+  sent.length = 0;
+  state.enabled = false;
+  await service.update();
+  assert.deepEqual(sent, [{ talking: false, mic: 'off' }]);
+  assert.equal(clock.timers.size, 0);
+});

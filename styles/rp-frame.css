@@ -83,7 +83,7 @@
 .rp-frame-voice-meter.talking .rp-frame-voice-level { background: #51cf66; }
 .rp-frame-voice-marker { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #e8ffe9; }
 .rp-frame-voice-threshold { display: flex; align-items: center; gap: 8px; }
-.rp-frame-voice-threshold input { flex: 1; }
+.rp-frame-voice-threshold input, .rp-frame-voice-threshold select { flex: 1; }
 .rp-frame-voice-threshold output { min-width: 4.5em; text-align: right; }
 /* Token and camera glow side by side; stacks again when the window is narrow. */
 .rp-frame-appearance-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
