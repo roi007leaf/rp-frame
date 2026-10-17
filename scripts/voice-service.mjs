@@ -65,6 +65,8 @@ export class VoiceService {
     }
     this.#consented = true;
     if (stops !== this.#stops) return;
+    // The switch or opt-out may have changed while the consent dialog was open.
+    if (!host.enabled() || host.optedOut()) return this.#update();
     const result = await host.mic.start(db => this.#level(db), () => this.#ended());
     // stop() during the await (e.g. pagehide) wins: close what just opened.
     if (stops !== this.#stops) return void this.#halt(MIC.off);

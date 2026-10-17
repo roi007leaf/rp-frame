@@ -153,6 +153,10 @@ export function registerSocket() {
     const from = sender(this);
     if (from && game.users.get(from) && roster.update(from, payload, Date.now())) renderVoice();
   });
+  // A newcomer's userConnected fires elsewhere before its handlers exist; it asks for statuses once ready.
+  socket.register('voiceHello', function() {
+    if (setting('voiceGlow')) voice?.announce();
+  });
   socket.register('unavailable', function(previousSession) {
     connection?.unavailable(sender(this), previousSession);
     connection?.poll(game.users.activeGM?.id, true);
@@ -242,6 +246,7 @@ export async function initialize() {
   }
   refresh();
   updateVoice();
+  socket.executeForOthers('voiceHello');
 }
 
 export function tokenControls(controls) {

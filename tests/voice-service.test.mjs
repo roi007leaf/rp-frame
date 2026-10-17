@@ -350,3 +350,20 @@ test('stop during an in-flight start leaves the mic closed', async () => {
   assert.equal(audio.tracks.every(track => track.stopped), true);
   assert.equal(service.status, 'off');
 });
+
+test('switch turned off during consent dialog never opens the mic', async () => {
+  const { service, state, host, audio, sent } = setup();
+  host.askConsent = async () => { state.asked++; state.enabled = false; return true; };
+  await service.update();
+  assert.equal(audio.calls, 0);
+  assert.equal(service.status, 'off');
+  assert.deepEqual(sent, []);
+});
+
+test('opt-out during consent dialog never opens the mic', async () => {
+  const { service, state, host, audio } = setup();
+  host.askConsent = async () => { state.asked++; state.optedOut = true; return true; };
+  await service.update();
+  assert.equal(audio.calls, 0);
+  assert.equal(service.status, 'off');
+});

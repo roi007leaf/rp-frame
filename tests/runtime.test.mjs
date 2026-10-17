@@ -186,3 +186,18 @@ test('disconnected talker stops glowing', () => {
   values.delete('voiceGlow');
   cameras = [];
 });
+
+test('initialize asks others to re-announce; voiceHello announces mic status when enabled', () => {
+  assert.ok(outbound.some(args=>args[0]==='voiceHello' && args.length===1));
+  assert.equal(typeof handlers.get('voiceHello'),'function');
+  const voices = () => outbound.filter(args=>args[0]==='voice').length;
+  let before = voices();
+  handlers.get('voiceHello').call(context('other'));
+  assert.equal(voices(),before);
+  values.set('voiceGlow',true);
+  before = voices();
+  handlers.get('voiceHello').call(context('other'));
+  assert.equal(voices(),before+1);
+  assert.deepEqual(outbound.at(-1)[1],{talking:false,mic:'off'});
+  values.delete('voiceGlow');
+});
