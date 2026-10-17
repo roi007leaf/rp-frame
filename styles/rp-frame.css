@@ -61,9 +61,11 @@
 /* Align-portrait button: top-right under the status icons, shown on hover like Foundry's controls. */
 .camera-view > .rp-frame-avatar-btn { position: absolute; z-index: 6; top: 34px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .15s; }
 .camera-view:hover > .rp-frame-avatar-btn, .camera-view > .rp-frame-avatar-btn:focus-visible { opacity: 1; }
-/* Voice glow: soft green halo on a talking player's camera tile (the RP-turn holder keeps the solid outline). */
-.camera-view::after { content: ''; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: var(--rp-frame-voice-shadow, 0 0 18px 6px rgb(81 207 102 / 40%)); opacity: 0; transition: opacity .2s; }
-.camera-view.rp-frame-voice::after { opacity: 1; }
+/* Voice glow: soft halo on a talking player's camera tile (the RP-turn holder keeps the solid outline).
+   On the tile itself, not ::after: core clips the tile (overflow: hidden) and uses its own ::after border.
+   Keeps core's drop shadow; core has no transition on .camera-view, and the speaker rule keeps its own. */
+.camera-view:not(.rp-frame-speaking) { transition: box-shadow .2s; }
+.camera-view.rp-frame-voice:not(.rp-frame-speaking) { box-shadow: 0 4px 10px black, var(--rp-frame-voice-shadow, 0 0 18px 6px rgb(81 207 102 / 40%)); }
 /* Bottom-left, opposite the bottom-right badge: GM-only mark for players whose mic is unavailable. */
 .camera-view > .rp-frame-nomic { position: absolute; z-index: 5; left: 6px; bottom: 32px; color: #868e96; pointer-events: none; }
 /* Voice glow window: Table, My mic and What I see sections. */
