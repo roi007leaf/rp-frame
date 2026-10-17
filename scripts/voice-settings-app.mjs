@@ -1,10 +1,12 @@
 import { VoiceDetector, DEFAULT_THRESHOLD_DB, FLOOR_DB } from './voice-detector.mjs';
 import { browserVoiceMic } from './voice-mic.mjs';
-import { DEFAULT_APPEARANCE, APPEARANCE_RANGES, glowStyle, normalizeAppearance } from './voice-glow.mjs';
+import { DEFAULT_APPEARANCE, APPEARANCE_RANGES, glowStyle, normalizeAppearance, normalizeAppearances } from './voice-glow.mjs';
 
 const MODULE_ID = 'rp-frame';
 const MIN_DB = -80, MAX_DB = -10;
 const SLIDERS = [['size', 'Size'], ['brightness', 'Brightness'], ['opacity', 'Opacity']];
+// Token and camera glow each have their own appearance controls, preview and reset.
+const PARTS = [['token', 'Token glow'], ['camera', 'Camera glow']];
 const MIC_MESSAGES = {
   denied: 'Microphone access was blocked. Allow it in your browser to see the meter.',
   unavailable: 'No microphone available.',
@@ -14,7 +16,7 @@ const get = key => game.settings.get(MODULE_ID, key);
 const set = (key, value) => game.settings.set(MODULE_ID, key, value);
 const percent = db => Math.min(100, Math.max(0, ((db - MIN_DB) / (MAX_DB - MIN_DB)) * 100));
 const threshold = () => Number(get('voiceThreshold') ?? DEFAULT_THRESHOLD_DB);
-const savedAppearance = () => normalizeAppearance(get('voiceAppearance'));
+const savedAppearances = () => normalizeAppearances(get('voiceAppearance'));
 
 /** Players' status line for the world switch they can't change. */
 export const tableStatus = on => on ? 'Voice glow is on for this table.' : 'Voice glow is off. Your GM can turn it on.';
@@ -63,8 +65,9 @@ export function refreshVoiceSettings() {
 let apply = () => {};
 let AppClass;
 /**
- * The single voice glow window: Table (world switch), My mic (opt-in, test meter, threshold), What I see (show, appearance).
- * Every call sets `onAppearance`, which shows an appearance live without saving; the cached class reads it at use time.
+ * The single voice glow window: Table (world switch), My mic (opt-in, test meter, threshold),
+ * What I see (show, then token and camera glow appearance).
+ * Every call sets `onAppearance`, which shows `{ token, camera }` appearances live without saving; the cached class reads it at use time.
  */
 export function voiceSettingsApp({ onAppearance } = {}) {
   if (onAppearance) apply = onAppearance;
@@ -84,7 +87,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
     level = FLOOR_DB;
     message = '';
     closed = false;
-    appearance = savedAppearance();
+    appearances = savedAppearances();
     // Appearance live edits not yet saved; reverted on close.
     dirty = false;
 
@@ -95,11 +98,31 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       const table = game.user.isGM
         ? `<label class="rp-frame-voice-check"><input type="checkbox" data-setting="voiceGlow"> Voice glow for this world</label>`
         : `<p class="rp-frame-voice-hint" data-role="status"></p>`;
-      const sliders = SLIDERS.map(([key, label]) => {
-        const [min, max] = APPEARANCE_RANGES[key];
-        return `<label class="rp-frame-voice-threshold">${label}
-          <input type="range" name="${key}" min="${min}" max="${max}" step="0.05" value="${this.appearance[key]}">
-          <output data-for="${key}"></output></label>`;
+      const previews = {
+        token: `<svg viewBox="0 0 160 160" width="160" height="160">
+              <circle cx="80" cy="80" r="32" class="rp-frame-appearance-token"></circle>
+              <g data-role="strokes"></g>
+            </svg>`,
+        camera: '<div class="rp-frame-appearance-camera"></div>'
+      };
+      const parts = PARTS.map(([part, title]) => {
+        const appearance = this.appearances[part];
+        const sliders = SLIDERS.map(([key, label]) => {
+          const [min, max] = APPEARANCE_RANGES[key];
+          return `<label class="rp-frame-voice-threshold">${label}
+            <input type="range" name="${part}-${key}" data-key="${key}" min="${min}" max="${max}" step="0.05" value="${appearance[key]}">
+            <output data-for="${part}-${key}"></output></label>`;
+        }).join('');
+        return `<div class="rp-frame-appearance-part" data-part="${part}">
+          <h4>${title}</h4>
+          <div class="rp-frame-appearance-preview" aria-hidden="true">${previews[part]}</div>
+          <label class="rp-frame-voice-threshold">Color
+            <input type="color" name="${part}-color" data-key="color" value="${appearance.color}"></label>
+          ${sliders}
+          <div class="rp-frame-avatar-buttons">
+            <button type="button" data-act="appearance-reset"><i class="fa-solid fa-rotate-left"></i> Reset to default</button>
+          </div>
+        </div>`;
       }).join('');
       root.innerHTML = `
         <section class="rp-frame-voice-section" data-section="table">
@@ -123,19 +146,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
         <section class="rp-frame-voice-section" data-section="look">
           <h3>What I see</h3>
           <label class="rp-frame-voice-check"><input type="checkbox" data-setting="voiceShow"> Show voice glow</label>
-          <div class="rp-frame-appearance-preview" aria-hidden="true">
-            <svg viewBox="0 0 160 160" width="160" height="160">
-              <circle cx="80" cy="80" r="32" class="rp-frame-appearance-token"></circle>
-              <g data-role="strokes"></g>
-            </svg>
-            <div class="rp-frame-appearance-camera"></div>
-          </div>
-          <label class="rp-frame-voice-threshold">Color
-            <input type="color" name="color" value="${this.appearance.color}"></label>
-          ${sliders}
-          <div class="rp-frame-avatar-buttons">
-            <button type="button" data-act="appearance-reset"><i class="fa-solid fa-rotate-left"></i> Reset to default</button>
-          </div>
+          ${parts}
         </section>
         <footer class="rp-frame-avatar-buttons">
           <button type="button" data-act="close" class="rp-frame-primary"><i class="fa-solid fa-check"></i> Done</button>
@@ -165,12 +176,18 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       on('[data-act=test]', 'click', () => this.micTest.running ? this.stopTest() : void this.startTest());
       // What I see.
       on('input[data-setting=voiceShow]', 'change', event => void set('voiceShow', event.target.checked));
-      for (const input of root.querySelectorAll('input[name]')) {
-        const read = () => input.type === 'color' ? input.value : Number(input.value);
-        input.addEventListener('input', () => this.updateAppearance({ [input.name]: read() }));
-        input.addEventListener('change', () => { this.updateAppearance({ [input.name]: read() }); void this.saveAppearance(); });
+      for (const group of root.querySelectorAll('[data-part]')) {
+        const part = group.dataset.part;
+        for (const input of group.querySelectorAll('input[data-key]')) {
+          const read = () => ({ [input.dataset.key]: input.type === 'color' ? input.value : Number(input.value) });
+          input.addEventListener('input', () => this.updateAppearance(part, read()));
+          input.addEventListener('change', () => { this.updateAppearance(part, read()); void this.saveAppearance(); });
+        }
+        group.querySelector('[data-act=appearance-reset]').addEventListener('click', () => {
+          this.updateAppearance(part, DEFAULT_APPEARANCE);
+          void this.saveAppearance();
+        });
       }
-      on('[data-act=appearance-reset]', 'click', () => { this.updateAppearance(DEFAULT_APPEARANCE); void this.saveAppearance(); });
       on('[data-act=close]', 'click', () => this.close());
       this.paintSettings();
       this.paint();
@@ -241,33 +258,37 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       message.hidden = !this.message;
     }
 
-    updateAppearance(changes) {
-      this.appearance = normalizeAppearance({ ...this.appearance, ...changes });
+    /** Change one part ('token' or 'camera'); the other part keeps its value. */
+    updateAppearance(part, changes) {
+      this.appearances = { ...this.appearances, [part]: normalizeAppearance({ ...this.appearances[part], ...changes }) };
       this.dirty = true;
-      apply(this.appearance);
+      apply(this.appearances);
       this.paintAppearance();
     }
 
     async saveAppearance() {
       this.dirty = false;
-      await set('voiceAppearance', { ...this.appearance });
+      await set('voiceAppearance', { token: { ...this.appearances.token }, camera: { ...this.appearances.camera } });
     }
 
     paintAppearance() {
       const root = this.element;
       if (!root) return;
-      const style = glowStyle(this.appearance);
-      const color = this.appearance.color;
+      const token = glowStyle(this.appearances.token);
+      const color = this.appearances.token.color;
       // 64px token circle, as on the canvas: radius = 32 + pad.
-      const radius = 32 + style.pad;
-      root.querySelector('[data-role=strokes]').innerHTML = style.strokes.map(({ width, alpha }) =>
+      const radius = 32 + token.pad;
+      root.querySelector('[data-role=strokes]').innerHTML = token.strokes.map(({ width, alpha }) =>
         `<circle cx="80" cy="80" r="${radius}" fill="none" stroke="${color}" stroke-width="${width}" stroke-opacity="${alpha}"></circle>`).join('');
-      root.querySelector('.rp-frame-appearance-camera').style.boxShadow = style.cameraShadow;
-      for (const input of root.querySelectorAll('input[name]')) {
-        const value = this.appearance[input.name];
-        if (input.value !== String(value)) input.value = String(value);
-        const output = root.querySelector(`output[data-for="${input.name}"]`);
-        if (output) output.textContent = `${Math.round(value * 100)}%`;
+      root.querySelector('.rp-frame-appearance-camera').style.boxShadow = glowStyle(this.appearances.camera).cameraShadow;
+      for (const group of root.querySelectorAll('[data-part]')) {
+        const appearance = this.appearances[group.dataset.part];
+        for (const input of group.querySelectorAll('input[data-key]')) {
+          const value = appearance[input.dataset.key];
+          if (input.value !== String(value)) input.value = String(value);
+          const output = group.querySelector(`output[data-for="${input.name}"]`);
+          if (output) output.textContent = `${Math.round(value * 100)}%`;
+        }
       }
     }
 
@@ -277,7 +298,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       this.closed = true;
       this.micTest.stop();
       // Closed mid-drag without a release: drop the unsaved live preview.
-      if (this.dirty) apply(savedAppearance());
+      if (this.dirty) apply(savedAppearances());
     }
   };
   return AppClass;

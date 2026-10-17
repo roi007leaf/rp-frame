@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { voiceGlowIds, VoiceGlow, applyVoiceCameras, fadeGlow, glowStyle, drawPixiGlow, DEFAULT_APPEARANCE } from '../scripts/voice-glow.mjs';
+import { voiceGlowIds, VoiceGlow, applyVoiceCameras, fadeGlow, glowStyle, drawPixiGlow, DEFAULT_APPEARANCE, DEFAULT_APPEARANCES, normalizeAppearances } from '../scripts/voice-glow.mjs';
 
 const users = new Map([
   ['a', { id: 'a', character: { id: 'amiri' } }],
@@ -202,4 +202,17 @@ test('redrawAll redraws every tracked ring', () => {
   drawn.length = 0;
   glow.redrawAll();
   assert.deepEqual(drawn, tokens);
+});
+
+test('normalizeAppearances migrates the flat shape', () => {
+  const both = { ...DEFAULT_APPEARANCE, color: '#ff0000', size: 2 };
+  assert.deepEqual(normalizeAppearances({ color: '#ff0000', size: 2 }), { token: both, camera: both });
+});
+
+test('normalizeAppearances fills missing parts', () => {
+  assert.deepEqual(normalizeAppearances({ token: { color: '#00ff00' } }),
+    { token: { ...DEFAULT_APPEARANCE, color: '#00ff00' }, camera: DEFAULT_APPEARANCE });
+  assert.deepEqual(normalizeAppearances(null), DEFAULT_APPEARANCES);
+  assert.deepEqual(DEFAULT_APPEARANCES, { token: DEFAULT_APPEARANCE, camera: DEFAULT_APPEARANCE });
+  assert.notEqual(DEFAULT_APPEARANCES.token, DEFAULT_APPEARANCE);
 });

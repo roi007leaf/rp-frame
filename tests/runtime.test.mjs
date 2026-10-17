@@ -246,11 +246,36 @@ test('voice appearance setting registered; changes update the camera shadow var'
   assert.equal(data.scope,'client');
   assert.equal(data.config,false);
   assert.equal(data.type,Object);
-  assert.deepEqual(data.default,{color:'#51cf66',size:1,brightness:1,opacity:1});
+  const flat = {color:'#51cf66',size:1,brightness:1,opacity:1};
+  assert.deepEqual(data.default,{token:flat,camera:flat});
   assert.equal(cssVars.get('--rp-frame-voice-shadow'),'0 0 18px 6px rgb(81 207 102 / 40%)');
-  const appearance = {color:'#ff0000',size:2,brightness:1,opacity:1};
+  const appearance = {token:flat,camera:{color:'#ff0000',size:2,brightness:1,opacity:1}};
   values.set('voiceAppearance',appearance);
   data.onChange(appearance);
   assert.equal(cssVars.get('--rp-frame-voice-shadow'),'0 0 36px 12px rgb(255 0 0 / 40%)');
   values.delete('voiceAppearance');
+});
+
+test('parts are independent: token glow uses the token color, camera var the camera color', () => {
+  const lines = [];
+  globalThis.PIXI = { Graphics: class { clear() { lines.length = 0; return this; } lineStyle(...args) { lines.push(args); return this; } drawCircle() { return this; } destroy() { this.destroyed = true; } } };
+  const tok = { actor:{id:'char'}, w:100, h:100, addChild(){}, removeChild(){} };
+  globalThis.canvas = { tokens:{ placeables:[tok] } };
+  users.get('player').character = {id:'char'};
+  values.set('voiceGlow',true);
+  handlers.get('voice').call(context('player'),{talking:true,mic:'ok'});
+  assert.ok(lines.length > 0);
+  const appearance = {token:{color:'#ff0000'},camera:{color:'#0000ff'}};
+  values.set('voiceAppearance',appearance);
+  settings.get('voiceAppearance').onChange(appearance);
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every(args=>args[1]===0xff0000));
+  assert.match(cssVars.get('--rp-frame-voice-shadow'),/rgb\(0 0 255 /);
+  handlers.get('voice').call(context('player'),{talking:false,mic:'ok'});
+  values.delete('voiceAppearance');
+  settings.get('voiceAppearance').onChange(settings.get('voiceAppearance').default);
+  values.delete('voiceGlow');
+  delete users.get('player').character;
+  delete globalThis.canvas;
+  delete globalThis.PIXI;
 });

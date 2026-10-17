@@ -35,6 +35,18 @@ export function normalizeAppearance(appearance) {
   return out;
 }
 
+export const DEFAULT_APPEARANCES = { token: { ...DEFAULT_APPEARANCE }, camera: { ...DEFAULT_APPEARANCE } };
+const FLAT_KEYS = ['color', 'size', 'brightness', 'opacity'];
+
+/** Token and camera appearances; an old flat appearance applies to both, a missing part is the default. */
+export function normalizeAppearances(value) {
+  const v = value && typeof value === 'object' ? value : {};
+  const flat = !('token' in v) && !('camera' in v) && FLAT_KEYS.some(key => key in v);
+  return flat
+    ? { token: normalizeAppearance(v), camera: normalizeAppearance(v) }
+    : { token: normalizeAppearance(v.token), camera: normalizeAppearance(v.camera) };
+}
+
 /** Token strokes (outer to inner) and camera box-shadow for an appearance; defaults match the original glow. */
 export function glowStyle(appearance) {
   const { color, size, brightness: b, opacity } = normalizeAppearance(appearance);

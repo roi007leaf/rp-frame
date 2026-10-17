@@ -85,7 +85,10 @@
 .rp-frame-voice-threshold { display: flex; align-items: center; gap: 8px; }
 .rp-frame-voice-threshold input { flex: 1; }
 .rp-frame-voice-threshold output { min-width: 4.5em; text-align: right; }
-.rp-frame-appearance-preview { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 4px 0; }
+.rp-frame-appearance-part { display: flex; flex-direction: column; gap: 8px; }
+.rp-frame-appearance-part h4 { margin: 4px 0 0; padding: 0; border: none; font-size: 13px; font-weight: bold; }
+/* Both previews share a height with room for the largest camera halo. */
+.rp-frame-appearance-preview { display: flex; align-items: center; justify-content: center; min-height: 160px; padding: 4px 0; }
 .rp-frame-appearance-token { fill: #495057; }
 .rp-frame-appearance-camera { width: 64px; height: 48px; border-radius: 4px; background: #343a40; }
 .rp-frame-voice-threshold input[type=color] { flex: 0 0 48px; height: 24px; margin-left: auto; padding: 0; }
