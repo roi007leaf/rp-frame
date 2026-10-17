@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { voiceGlowIds, VoiceGlow, applyVoiceCameras, fadeGlow } from '../scripts/voice-glow.mjs';
+import { voiceGlowIds, VoiceGlow, applyVoiceCameras, fadeGlow, glowStyle, drawPixiGlow, DEFAULT_APPEARANCE } from '../scripts/voice-glow.mjs';
 
 const users = new Map([
   ['a', { id: 'a', character: { id: 'amiri' } }],
@@ -140,4 +140,66 @@ test('fade without a canvas ticker jumps to the end', () => {
   assert.doesNotThrow(() => fadeGlow(glow, 0, 1, 150, () => done++));
   assert.equal(glow.alpha, 1);
   assert.equal(done, 1);
+});
+
+const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
+
+test('glowStyle defaults reproduce the original glow', () => {
+  assert.deepEqual(DEFAULT_APPEARANCE, { color: '#51cf66', size: 1, brightness: 1, opacity: 1 });
+  const style = glowStyle(DEFAULT_APPEARANCE);
+  assert.equal(style.color, 0x51cf66);
+  assert.equal(style.pad, 6);
+  assert.deepEqual(style.strokes.map(s => s.width), [18, 10, 4]);
+  [0.12, 0.2, 0.35].forEach((alpha, i) => close(style.strokes[i].alpha, alpha));
+  assert.equal(style.cameraShadow, '0 0 18px 6px rgb(81 207 102 / 40%)');
+  assert.deepEqual(glowStyle(), style);
+});
+
+test('glowStyle clamps and falls back', () => {
+  assert.equal(glowStyle({ size: 5 }).pad, 12);
+  assert.equal(glowStyle({ size: 0 }).pad, 3);
+  close(glowStyle({ opacity: 0 }).strokes[0].alpha, 0.012);
+  assert.deepEqual(glowStyle({ brightness: 'x' }), glowStyle(DEFAULT_APPEARANCE));
+  assert.deepEqual(glowStyle({ size: NaN, opacity: Infinity }), glowStyle(DEFAULT_APPEARANCE));
+  assert.equal(glowStyle({ color: 'red' }).color, 0x51cf66);
+  assert.equal(glowStyle({ color: '#fff' }).color, 0x51cf66);
+  const bright = glowStyle({ brightness: 2.5, opacity: 1 });
+  assert.ok(bright.strokes.every(s => s.alpha <= 1));
+  assert.equal(bright.strokes[2].alpha, 1);
+  assert.equal(glowStyle({ brightness: 99 }).strokes[0].alpha, glowStyle({ brightness: 2.5 }).strokes[0].alpha);
+});
+
+test('glowStyle scales with size and colors', () => {
+  const big = glowStyle({ size: 2 });
+  assert.equal(big.pad, 12);
+  assert.deepEqual(big.strokes.map(s => s.width), [36, 20, 8]);
+  assert.equal(big.cameraShadow, '0 0 36px 12px rgb(81 207 102 / 40%)');
+  const red = glowStyle({ color: '#ff0000' });
+  assert.equal(red.color, 0xff0000);
+  assert.match(red.cameraShadow, /rgb\(255 0 0 /);
+  assert.match(glowStyle({ brightness: 2, opacity: 0.5 }).cameraShadow, / \/ 40%\)$/);
+});
+
+test('drawPixiGlow uses appearance', () => {
+  const calls = [];
+  const glow = { clear() { calls.length = 0; return this; }, lineStyle(...args) { calls.push(['line', ...args]); return this; },
+    drawCircle(...args) { calls.push(['circle', ...args]); return this; } };
+  const appearance = { color: '#123456', size: 1.5, brightness: 2, opacity: 0.5 };
+  const style = glowStyle(appearance);
+  drawPixiGlow(glow, { w: 100, h: 80 }, appearance);
+  const lines = calls.filter(c => c[0] === 'line');
+  assert.deepEqual(lines, style.strokes.map(s => ['line', s.width, 0x123456, s.alpha]));
+  assert.ok(calls.filter(c => c[0] === 'circle').every(c => c[1] === 50 && c[2] === 40 && c[3] === 50 + 9));
+  drawPixiGlow(glow, { w: 100, h: 100 });
+  assert.deepEqual(calls.filter(c => c[0] === 'line').map(c => c[2]), [0x51cf66, 0x51cf66, 0x51cf66]);
+});
+
+test('redrawAll redraws every tracked ring', () => {
+  const tokens = [token('t1', 'amiri'), token('t2', 'bo')];
+  const drawn = [];
+  const glow = make(tokens, { drawRing: (ring, t) => drawn.push(t) });
+  glow.sync({ talkingIds: new Set(['a', 'b']), state: null });
+  drawn.length = 0;
+  glow.redrawAll();
+  assert.deepEqual(drawn, tokens);
 });

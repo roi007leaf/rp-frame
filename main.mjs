@@ -10,11 +10,12 @@ import { DEFAULT_THRESHOLD_DB } from './scripts/voice-detector.mjs';
 import { VoiceRoster } from './scripts/voice-roster.mjs';
 import { browserVoiceMic } from './scripts/voice-mic.mjs';
 import { VoiceService } from './scripts/voice-service.mjs';
-import { VoiceGlow, createPixiGlow, drawPixiGlow, fadeGlow, applyVoiceCameras, voiceGlowIds } from './scripts/voice-glow.mjs';
+import { VoiceGlow, createPixiGlow, drawPixiGlow, fadeGlow, applyVoiceCameras, voiceGlowIds, glowStyle, normalizeAppearance, DEFAULT_APPEARANCE } from './scripts/voice-glow.mjs';
 import { voiceSensitivityApp } from './scripts/voice-sensitivity-app.mjs';
+import { voiceAppearanceApp } from './scripts/voice-appearance-app.mjs';
 
 export const MODULE_ID = 'rp-frame';
-let socket, controller, connection, view, spotlight, highlight, pollTimer, voice, voiceGlow;
+let socket, controller, connection, view, spotlight, highlight, pollTimer, voice, voiceGlow, appearance = normalizeAppearance();
 const roster = new VoiceRoster();
 const session = Date.now() + Math.random();
 let initialized = false;
@@ -69,6 +70,13 @@ function detachGlow(token, glow) {
   });
 }
 
+/** Show a voice glow appearance on this screen: camera halo CSS var plus token glow redraw. */
+function applyAppearance(value) {
+  appearance = normalizeAppearance(value);
+  globalThis.document?.documentElement?.style?.setProperty?.('--rp-frame-voice-shadow', glowStyle(appearance).cameraShadow);
+  voiceGlow?.redrawAll();
+}
+
 function createGlow() {
   const glow = createPixiGlow();
   glow.alpha = 0;
@@ -106,8 +114,12 @@ export function registerSettings() {
   register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: true, type: Boolean, default: true, onChange: renderVoice });
   register('voiceConsent', { scope: 'client', config: false, type: Boolean, default: false });
   register('voiceThreshold', { scope: 'client', config: false, type: Number, default: DEFAULT_THRESHOLD_DB });
+  register('voiceAppearance', { scope: 'client', config: false, type: Object, default: { ...DEFAULT_APPEARANCE }, onChange: applyAppearance });
   const sensitivity = voiceSensitivityApp();
   if (sensitivity) game.settings.registerMenu(MODULE_ID, 'voiceSensitivity', { name: 'RP Frame: voice glow sensitivity', label: 'Adjust', icon: 'fa-solid fa-microphone-lines', restricted: false, type: sensitivity });
+  const appearanceApp = voiceAppearanceApp(applyAppearance);
+  if (appearanceApp) game.settings.registerMenu(MODULE_ID, 'voiceAppearance', { name: 'RP Frame: voice glow appearance', label: 'Customize', icon: 'fa-solid fa-palette', restricted: false, type: appearanceApp });
+  applyAppearance(setting('voiceAppearance'));
 }
 
 export function registerKeybindings() {
@@ -200,7 +212,7 @@ export async function initialize() {
   voiceGlow = new VoiceGlow({
     tokens: () => globalThis.canvas?.tokens?.placeables ?? [], users: () => game.users,
     enabled: () => setting('voiceGlow') && setting('voiceShow'),
-    createRing: createGlow, drawRing: drawPixiGlow, detachRing: detachGlow
+    createRing: createGlow, drawRing: (glow, token) => drawPixiGlow(glow, token, appearance), detachRing: detachGlow
   });
   voice = new VoiceService({
     enabled: () => setting('voiceGlow'), optedOut: () => setting('voiceOptOut'), consented: () => setting('voiceConsent'),

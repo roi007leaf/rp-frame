@@ -62,11 +62,11 @@
 .camera-view > .rp-frame-avatar-btn { position: absolute; z-index: 6; top: 34px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .15s; }
 .camera-view:hover > .rp-frame-avatar-btn, .camera-view > .rp-frame-avatar-btn:focus-visible { opacity: 1; }
 /* Voice glow: soft green halo on a talking player's camera tile (the RP-turn holder keeps the solid outline). */
-.camera-view::after { content: ''; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: 0 0 18px 6px rgb(81 207 102 / 40%); opacity: 0; transition: opacity .2s; }
+.camera-view::after { content: ''; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: var(--rp-frame-voice-shadow, 0 0 18px 6px rgb(81 207 102 / 40%)); opacity: 0; transition: opacity .2s; }
 .camera-view.rp-frame-voice::after { opacity: 1; }
 /* Bottom-left, opposite the bottom-right badge: GM-only mark for players whose mic is unavailable. */
 .camera-view > .rp-frame-nomic { position: absolute; z-index: 5; left: 6px; bottom: 32px; color: #868e96; pointer-events: none; }
-/* Voice glow sensitivity window. */
+/* Voice glow sensitivity and appearance windows. */
 .rp-frame-voice-editor { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
 .rp-frame-voice-editor p { margin: 0; }
 .rp-frame-voice-hint { font-size: 12px; opacity: .75; }
@@ -78,3 +78,7 @@
 .rp-frame-voice-threshold { display: flex; align-items: center; gap: 8px; }
 .rp-frame-voice-threshold input { flex: 1; }
 .rp-frame-voice-threshold output { min-width: 4.5em; text-align: right; }
+.rp-frame-appearance-preview { display: flex; align-items: center; justify-content: center; gap: 24px; padding: 4px 0; }
+.rp-frame-appearance-token { fill: #495057; }
+.rp-frame-appearance-camera { width: 64px; height: 48px; border-radius: 4px; background: #343a40; }
+.rp-frame-voice-threshold input[type=color] { flex: 0 0 48px; height: 24px; margin-left: auto; padding: 0; }

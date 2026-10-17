@@ -52,6 +52,11 @@ export class SpeakerHighlight {
     const ring = this.rings.get(token);
     if (ring) this.host.drawRing(ring, token);
   }
+
+  /** Redraw every tracked ring, e.g. after an appearance change. */
+  redrawAll() {
+    for (const [token, ring] of this.rings) this.host.drawRing(ring, token);
+  }
 }
 
 /** PIXI ring sized to the token, in RP Frame's speaking green. */

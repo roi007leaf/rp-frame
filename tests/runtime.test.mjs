@@ -8,7 +8,8 @@ const users = new Map([['gm',{id:'gm',isGM:true}],['other',{id:'other',isGM:true
 Object.defineProperty(users,'activeGM',{get:()=>users.get(authority)});
 globalThis.Hooks = { once:(name,callback)=>hooks.set(name,callback), on:(name,callback)=>onHooks.set(name,[...(onHooks.get(name)??[]),callback]), callAll:()=>{} };
 let cameras = [];
-globalThis.document = { body:null, querySelectorAll:selector=>selector==='.camera-view[data-user]' ? cameras : [],
+const cssVars = new Map();
+globalThis.document = { body:null, documentElement:{ style:{ setProperty:(name,value)=>cssVars.set(name,value) } }, querySelectorAll:selector=>selector==='.camera-view[data-user]' ? cameras : [],
   createElement:()=>({dataset:{},setAttribute(){},addEventListener(){}}) };
 // No mic in this environment: voice glow must stay quiet rather than throw.
 Object.defineProperty(globalThis,'navigator',{value:{},configurable:true,writable:true});
@@ -200,4 +201,25 @@ test('initialize asks others to re-announce; voiceHello announces mic status whe
   assert.equal(voices(),before+1);
   assert.deepEqual(outbound.at(-1)[1],{talking:false,mic:'off'});
   values.delete('voiceGlow');
+});
+
+test('voice appearance setting and menu registered; changes update the camera shadow var', () => {
+  const data = settings.get('voiceAppearance');
+  assert.ok(data);
+  assert.equal(data.scope,'client');
+  assert.equal(data.config,false);
+  assert.equal(data.type,Object);
+  assert.deepEqual(data.default,{color:'#51cf66',size:1,brightness:1,opacity:1});
+  const menu = menus.get('voiceAppearance');
+  assert.ok(menu);
+  assert.equal(menu.restricted,false);
+  assert.equal(menu.label,'Customize');
+  assert.equal(menu.icon,'fa-solid fa-palette');
+  assert.equal(typeof menu.type,'function');
+  assert.equal(cssVars.get('--rp-frame-voice-shadow'),'0 0 18px 6px rgb(81 207 102 / 40%)');
+  const appearance = {color:'#ff0000',size:2,brightness:1,opacity:1};
+  values.set('voiceAppearance',appearance);
+  data.onChange(appearance);
+  assert.equal(cssVars.get('--rp-frame-voice-shadow'),'0 0 36px 12px rgb(255 0 0 / 40%)');
+  values.delete('voiceAppearance');
 });
