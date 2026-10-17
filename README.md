@@ -18,13 +18,16 @@ Default shortcuts, editable in Foundry's **Configure Controls**: **H** requests/
 
 ## Voice glow
 
-Optional, off by default. When the GM turns on **RP Frame: voice glow** (world setting), a talking player's character tokens get a soft green glow and their camera tile a green halo. The current RP speaker keeps only the solid speaker ring.
+Optional, off by default. Everything lives in one window: **Configure Settings → RP Frame: voice glow → Open**. When the GM turns it on, a talking player's character tokens get a soft green glow and their camera tile a green halo. The current RP speaker keeps only the solid speaker ring.
 
+The window has three sections, and every control saves as soon as you change it:
+
+- **Table:** GMs get **Voice glow for this world**. Players see whether it's on instead.
+- **My mic:** **Use my mic for voice glow** (turn it off to opt out at any time). **Test mic** opens a live level meter so you can set the threshold slider: raise it if background noise triggers the glow, lower it if quiet speech doesn't. The test only runs while you ask for it, works even when voice glow is off, and stops when you press **Stop test** or close the window.
+- **What I see:** **Show voice glow** hides glows on your own screen only. The color, size, brightness and opacity controls have a live preview and affect your own screen only (token glow and camera halo); other players keep their own look. **Reset to default** restores the original green.
 - **Privacy:** each player's browser measures its own mic *volume level* locally. No audio is sent, recorded or stored; only "talking / not talking" and a mic status are shared.
 - **Consent:** the first time it's enabled, each player is asked before the mic is used. **No thanks** opts that player out.
-- **Opt out:** any player can turn on **RP Frame: don't use my mic for voice glow** at any time. **RP Frame: show voice glow** hides glows on your own screen only. GMs see a muted-mic mark on the cameras of players whose mic is off, blocked or unavailable.
-- **Sensitivity:** **RP Frame: voice glow sensitivity → Adjust** opens a live level meter with a threshold slider. Raise the threshold if background noise triggers the glow, lower it if quiet speech doesn't. Changes apply immediately.
-- **Appearance:** **RP Frame: voice glow appearance → Customize** sets the glow's color, size, brightness and opacity with a live preview. It affects your own screen only (token glow and camera halo); other players keep their own look. **Reset to default** restores the original green.
+- **Muted mics:** GMs see a muted-mic mark on the cameras of players whose mic is off, blocked or unavailable.
 - **Push-to-talk:** voice glow listens to the mic directly, so it reacts to speech even when your voice chat push-to-talk key is up, and Foundry's own A/V mute doesn't silence it. Opt out if that's a problem.
 - **Background tabs:** browsers throttle timers in hidden or fully covered tabs, so detection gets coarse (late or missed glows) while Foundry isn't visible.
 

@@ -150,10 +150,47 @@ test('settings registered', () => {
   assert.equal(settings.get('voiceGlow').default,false);
   assert.equal(settings.get('voiceThreshold').default,-45);
   assert.equal(settings.get('voiceConsent').config,false);
-  const menu = menus.get('voiceSensitivity');
+});
+
+test('voice toggles are hidden from the settings list and keep scope and default', () => {
+  const expected = { voiceGlow:['world',false], voiceOptOut:['client',false], voiceShow:['client',true] };
+  for (const [key,[scope,value]] of Object.entries(expected)) {
+    const data = settings.get(key);
+    assert.equal(data.config,false,key);
+    assert.equal(data.scope,scope,key);
+    assert.equal(data.type,Boolean,key);
+    assert.equal(data.default,value,key);
+    assert.equal(typeof data.onChange,'function',key);
+  }
+});
+
+test('one voice glow menu replaces the sensitivity and appearance menus', () => {
+  assert.equal(menus.has('voiceSensitivity'),false);
+  assert.equal(menus.has('voiceAppearance'),false);
+  const menu = menus.get('voiceSettings');
   assert.ok(menu);
+  assert.equal(menu.name,'RP Frame: voice glow');
+  assert.equal(menu.label,'Open');
+  assert.equal(menu.hint,'Turn voice glow on for the table (GM), set up your mic, and choose how the glow looks on your screen.');
+  assert.equal(menu.icon,'fa-solid fa-microphone-lines');
   assert.equal(menu.restricted,false);
   assert.equal(typeof menu.type,'function');
+});
+
+test('voice glow window helpers: table status line and test button label', async () => {
+  const { tableStatus, testLabel } = await import('../scripts/voice-settings-app.mjs');
+  assert.equal(tableStatus(true),'Voice glow is on for this table.');
+  assert.equal(tableStatus(false),'Voice glow is off. Your GM can turn it on.');
+  assert.equal(testLabel(false),'Test mic');
+  assert.equal(testLabel(true),'Stop test');
+});
+
+test('old voice window files are gone', async () => {
+  for (const file of ['voice-sensitivity-app.mjs','voice-appearance-app.mjs']) {
+    await assert.rejects(readFile(new URL(`../scripts/${file}`,import.meta.url)), file);
+  }
+  const source = await readFile(new URL('../main.mjs',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/voice-(sensitivity|appearance)-app/);
 });
 
 test('voice socket from another user renders glow', () => {
@@ -203,19 +240,13 @@ test('initialize asks others to re-announce; voiceHello announces mic status whe
   values.delete('voiceGlow');
 });
 
-test('voice appearance setting and menu registered; changes update the camera shadow var', () => {
+test('voice appearance setting registered; changes update the camera shadow var', () => {
   const data = settings.get('voiceAppearance');
   assert.ok(data);
   assert.equal(data.scope,'client');
   assert.equal(data.config,false);
   assert.equal(data.type,Object);
   assert.deepEqual(data.default,{color:'#51cf66',size:1,brightness:1,opacity:1});
-  const menu = menus.get('voiceAppearance');
-  assert.ok(menu);
-  assert.equal(menu.restricted,false);
-  assert.equal(menu.label,'Customize');
-  assert.equal(menu.icon,'fa-solid fa-palette');
-  assert.equal(typeof menu.type,'function');
   assert.equal(cssVars.get('--rp-frame-voice-shadow'),'0 0 18px 6px rgb(81 207 102 / 40%)');
   const appearance = {color:'#ff0000',size:2,brightness:1,opacity:1};
   values.set('voiceAppearance',appearance);

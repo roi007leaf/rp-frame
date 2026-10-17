@@ -11,8 +11,7 @@ import { VoiceRoster } from './scripts/voice-roster.mjs';
 import { browserVoiceMic } from './scripts/voice-mic.mjs';
 import { VoiceService } from './scripts/voice-service.mjs';
 import { VoiceGlow, createPixiGlow, drawPixiGlow, fadeGlow, applyVoiceCameras, voiceGlowIds, glowStyle, normalizeAppearance, DEFAULT_APPEARANCE } from './scripts/voice-glow.mjs';
-import { voiceSensitivityApp } from './scripts/voice-sensitivity-app.mjs';
-import { voiceAppearanceApp } from './scripts/voice-appearance-app.mjs';
+import { voiceSettingsApp, refreshVoiceSettings } from './scripts/voice-settings-app.mjs';
 
 export const MODULE_ID = 'rp-frame';
 let socket, controller, connection, view, spotlight, highlight, pollTimer, voice, voiceGlow, appearance = normalizeAppearance();
@@ -109,16 +108,14 @@ export function registerSettings() {
   register('tokenHighlight', { name: 'RP Frame: highlight speaker token', hint: 'Draw a green ring around the speaking player\'s character tokens.', scope: 'client', config: true, type: Boolean, default: true, onChange: refresh });
   register('linkSpotlight', { name: 'RP Frame: follow StoryFrame spotlight', hint: 'When optional StoryFrame is enabled, highlight existing speakers matching each player character. Restore the previous spotlight when the RP scene ends.', scope: 'world', config: true, type: Boolean, default: true, onChange: () => { if (controller) void spotlight?.sync(controller.state); } });
   register('stopForCombat', { name: 'RP Frame: end scene when combat starts', scope: 'world', config: true, type: Boolean, default: true });
-  register('voiceGlow', { name: 'RP Frame: voice glow', hint: 'Players\' character tokens and camera tiles glow while they talk. Each player\'s browser measures their own mic level; no audio is sent or recorded.', scope: 'world', config: true, type: Boolean, default: false, onChange: () => { updateVoice(); renderVoice(); } });
-  register('voiceOptOut', { name: 'RP Frame: don\'t use my mic for voice glow', scope: 'client', config: true, type: Boolean, default: false, onChange: updateVoice });
-  register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: true, type: Boolean, default: true, onChange: renderVoice });
+  register('voiceGlow', { name: 'RP Frame: voice glow', hint: 'Players\' character tokens and camera tiles glow while they talk. Each player\'s browser measures their own mic level; no audio is sent or recorded.', scope: 'world', config: false, type: Boolean, default: false, onChange: () => { updateVoice(); renderVoice(); refreshVoiceSettings(); } });
+  register('voiceOptOut', { name: 'RP Frame: don\'t use my mic for voice glow', scope: 'client', config: false, type: Boolean, default: false, onChange: updateVoice });
+  register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: false, type: Boolean, default: true, onChange: renderVoice });
   register('voiceConsent', { scope: 'client', config: false, type: Boolean, default: false });
   register('voiceThreshold', { scope: 'client', config: false, type: Number, default: DEFAULT_THRESHOLD_DB });
   register('voiceAppearance', { scope: 'client', config: false, type: Object, default: { ...DEFAULT_APPEARANCE }, onChange: applyAppearance });
-  const sensitivity = voiceSensitivityApp();
-  if (sensitivity) game.settings.registerMenu(MODULE_ID, 'voiceSensitivity', { name: 'RP Frame: voice glow sensitivity', label: 'Adjust', icon: 'fa-solid fa-microphone-lines', restricted: false, type: sensitivity });
-  const appearanceApp = voiceAppearanceApp(applyAppearance);
-  if (appearanceApp) game.settings.registerMenu(MODULE_ID, 'voiceAppearance', { name: 'RP Frame: voice glow appearance', label: 'Customize', icon: 'fa-solid fa-palette', restricted: false, type: appearanceApp });
+  const voiceApp = voiceSettingsApp({ onAppearance: applyAppearance });
+  if (voiceApp) game.settings.registerMenu(MODULE_ID, 'voiceSettings', { name: 'RP Frame: voice glow', label: 'Open', hint: 'Turn voice glow on for the table (GM), set up your mic, and choose how the glow looks on your screen.', icon: 'fa-solid fa-microphone-lines', restricted: false, type: voiceApp });
   applyAppearance(setting('voiceAppearance'));
 }
 
