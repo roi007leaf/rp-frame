@@ -85,6 +85,8 @@
 .rp-frame-voice-threshold { display: flex; align-items: center; gap: 8px; }
 .rp-frame-voice-threshold input { flex: 1; }
 .rp-frame-voice-threshold output { min-width: 4.5em; text-align: right; }
+/* Token and camera glow side by side; stacks again when the window is narrow. */
+.rp-frame-appearance-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .rp-frame-appearance-part { display: flex; flex-direction: column; gap: 8px; }
 .rp-frame-appearance-part h4 { margin: 4px 0 0; padding: 0; border: none; font-size: 13px; font-weight: bold; }
 /* Both previews share a height with room for the largest camera halo. */

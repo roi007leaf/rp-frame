@@ -78,7 +78,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
     static DEFAULT_OPTIONS = {
       classes: ['rp-frame-voice-app'],
       window: { title: 'Voice glow', icon: 'fa-solid fa-microphone-lines' },
-      position: { width: 380, height: 'auto' }
+      position: { width: 640, height: 'auto' }
     };
 
     // This window's own mic test, separate from the voice service's mic; stopped on close.
@@ -146,7 +146,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
         <section class="rp-frame-voice-section" data-section="look">
           <h3>What I see</h3>
           <label class="rp-frame-voice-check"><input type="checkbox" data-setting="voiceShow"> Show voice glow</label>
-          ${parts}
+          <div class="rp-frame-appearance-parts">${parts}</div>
         </section>
         <footer class="rp-frame-avatar-buttons">
           <button type="button" data-act="close" class="rp-frame-primary"><i class="fa-solid fa-check"></i> Done</button>
