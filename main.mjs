@@ -109,8 +109,8 @@ export function registerSettings() {
   register('linkSpotlight', { name: 'RP Frame: follow StoryFrame spotlight', hint: 'When optional StoryFrame is enabled, highlight existing speakers matching each player character. Restore the previous spotlight when the RP scene ends.', scope: 'world', config: true, type: Boolean, default: true, onChange: () => { if (controller) void spotlight?.sync(controller.state); } });
   register('stopForCombat', { name: 'RP Frame: end scene when combat starts', scope: 'world', config: true, type: Boolean, default: true });
   register('voiceGlow', { name: 'RP Frame: voice glow', hint: 'Players\' character tokens and camera tiles glow while they talk. Each player\'s browser measures their own mic level; no audio is sent or recorded.', scope: 'world', config: false, type: Boolean, default: false, onChange: () => { updateVoice(); renderVoice(); refreshVoiceSettings(); } });
-  register('voiceOptOut', { name: 'RP Frame: don\'t use my mic for voice glow', scope: 'client', config: false, type: Boolean, default: false, onChange: updateVoice });
-  register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: false, type: Boolean, default: true, onChange: renderVoice });
+  register('voiceOptOut', { name: 'RP Frame: don\'t use my mic for voice glow', scope: 'client', config: false, type: Boolean, default: false, onChange: () => { updateVoice(); refreshVoiceSettings(); } });
+  register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: false, type: Boolean, default: true, onChange: () => { renderVoice(); refreshVoiceSettings(); } });
   register('voiceConsent', { scope: 'client', config: false, type: Boolean, default: false });
   register('voiceThreshold', { scope: 'client', config: false, type: Number, default: DEFAULT_THRESHOLD_DB });
   register('voiceAppearance', { scope: 'client', config: false, type: Object, default: { ...DEFAULT_APPEARANCE }, onChange: applyAppearance });

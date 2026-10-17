@@ -21,11 +21,43 @@ export const tableStatus = on => on ? 'Voice glow is on for this table.' : 'Voic
 /** Label of the button that starts or stops the window's own mic test. */
 export const testLabel = testing => testing ? 'Stop test' : 'Test mic';
 
-// Open windows, so a voiceGlow change (from any GM) can refresh their Table section.
+/**
+ * The window's Test mic: each run gets a fresh mic, so overlapping getUserMedia calls that resolve
+ * out of order can't orphan a stream. A run that was stopped before its mic opened releases it.
+ */
+export class MicTest {
+  constructor(createMic) {
+    this.createMic = createMic;
+    this.mic = null;
+  }
+
+  get running() { return this.mic !== null; }
+
+  /** Resolves 'ok', 'denied' or 'unavailable', or 'cancelled' if stopped (or restarted) meanwhile. */
+  async start(onLevel, onEnded) {
+    this.stop();
+    const mic = this.mic = this.createMic();
+    const current = () => this.mic === mic;
+    let result;
+    try { result = await mic.start(db => { if (current()) onLevel(db); }, () => { if (current()) onEnded(); }); }
+    catch { result = 'unavailable'; }
+    if (!current()) { mic.stop(); return 'cancelled'; }
+    if (result !== 'ok') this.stop();
+    return result;
+  }
+
+  stop() {
+    const mic = this.mic;
+    this.mic = null;
+    mic?.stop();
+  }
+}
+
+// Open windows, so a voice setting change (another GM, the consent dialog) can refresh them.
 const open = new Set();
-/** Repaint the Table section of any open voice glow window. */
+/** Refresh the Table status and the checkboxes of any open voice glow window. */
 export function refreshVoiceSettings() {
-  for (const app of open) app.paintTable();
+  for (const app of open) app.paintSettings();
 }
 
 let apply = () => {};
@@ -46,14 +78,11 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       position: { width: 380, height: 'auto' }
     };
 
-    // This window's own mic, separate from the voice service's; only runs during Test mic and stops on close.
-    mic = browserVoiceMic();
+    // This window's own mic test, separate from the voice service's mic; stopped on close.
+    micTest = new MicTest(browserVoiceMic);
     detector = new VoiceDetector({ threshold: threshold() });
     level = FLOOR_DB;
     message = '';
-    testing = false;
-    // Bumped on every start/stop so a late getUserMedia result from a cancelled test is discarded.
-    testRun = 0;
     closed = false;
     appearance = savedAppearance();
     // Appearance live edits not yet saved; reverted on close.
@@ -133,7 +162,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       slider.addEventListener('input', () => this.setThreshold(Number(slider.value)));
       slider.addEventListener('change', () => void saveThreshold());
       on('[data-act=threshold-reset]', 'click', () => { this.setThreshold(DEFAULT_THRESHOLD_DB); void saveThreshold(); });
-      on('[data-act=test]', 'click', () => this.testing ? this.stopTest() : void this.startTest());
+      on('[data-act=test]', 'click', () => this.micTest.running ? this.stopTest() : void this.startTest());
       // What I see.
       on('input[data-setting=voiceShow]', 'change', event => void set('voiceShow', event.target.checked));
       for (const input of root.querySelectorAll('input[name]')) {
@@ -143,31 +172,24 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       }
       on('[data-act=appearance-reset]', 'click', () => { this.updateAppearance(DEFAULT_APPEARANCE); void this.saveAppearance(); });
       on('[data-act=close]', 'click', () => this.close());
-      root.querySelector('input[data-setting=voiceUse]').checked = !get('voiceOptOut');
-      root.querySelector('input[data-setting=voiceShow]').checked = Boolean(get('voiceShow'));
-      this.paintTable();
+      this.paintSettings();
       this.paint();
       this.paintAppearance();
     }
 
     /** Test mic: an explicit, local action that works whether the world switch is on or off. */
     async startTest() {
-      const run = ++this.testRun;
-      this.testing = true;
       this.message = '';
+      const pending = this.micTest.start(db => this.onLevel(db), () => { this.stopTest(); this.showMessage(MIC_MESSAGES.ended); });
       this.paint();
-      let result;
-      try { result = await this.mic.start(db => this.onLevel(db), () => { if (run !== this.testRun) return; this.stopTest(); this.showMessage(MIC_MESSAGES.ended); }); }
-      catch { result = 'unavailable'; }
-      // Closed or stopped while getUserMedia was pending: release the mic it just opened.
-      if (this.closed || run !== this.testRun) return void this.mic.stop();
+      const result = await pending;
+      // 'cancelled': stopped, restarted or closed while getUserMedia was pending; MicTest already released that mic.
+      if (result === 'cancelled' || this.closed) return;
       if (result !== 'ok') { this.stopTest(); this.showMessage(MIC_MESSAGES[result] ?? MIC_MESSAGES.unavailable); }
     }
 
     stopTest() {
-      this.testRun++;
-      this.testing = false;
-      this.mic.stop();
+      this.micTest.stop();
       this.level = FLOOR_DB;
       this.detector.reset();
       this.paint();
@@ -189,9 +211,12 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       this.paint();
     }
 
-    paintTable() {
+    /** Setting-bound controls: Table checkbox or status line, and the two personal checkboxes. */
+    paintSettings() {
       const root = this.element;
       if (!root) return;
+      root.querySelector('input[data-setting=voiceUse]').checked = !get('voiceOptOut');
+      root.querySelector('input[data-setting=voiceShow]').checked = Boolean(get('voiceShow'));
       const enabled = Boolean(get('voiceGlow'));
       const box = root.querySelector('input[data-setting=voiceGlow]');
       if (box) box.checked = enabled;
@@ -209,8 +234,8 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       root.querySelector('output[data-role=threshold]').textContent = `${value} dB`;
       root.querySelector('.rp-frame-voice-level').style.width = `${percent(this.level)}%`;
       root.querySelector('.rp-frame-voice-marker').style.left = `${percent(value)}%`;
-      root.querySelector('.rp-frame-voice-meter').classList.toggle('talking', this.testing && this.detector.talking);
-      root.querySelector('[data-act=test] span').textContent = testLabel(this.testing);
+      root.querySelector('.rp-frame-voice-meter').classList.toggle('talking', this.micTest.running && this.detector.talking);
+      root.querySelector('[data-act=test] span').textContent = testLabel(this.micTest.running);
       const message = root.querySelector('[data-role=message]');
       message.textContent = this.message;
       message.hidden = !this.message;
@@ -250,9 +275,7 @@ export function voiceSettingsApp({ onAppearance } = {}) {
       super._onClose?.(options);
       open.delete(this);
       this.closed = true;
-      this.testRun++;
-      this.testing = false;
-      this.mic.stop();
+      this.micTest.stop();
       // Closed mid-drag without a release: drop the unsaved live preview.
       if (this.dirty) apply(savedAppearance());
     }
