@@ -1,13 +1,20 @@
 {
   "id": "rp-frame",
   "title": "RP Frame",
-  "description": "GM-approved roleplay scenes and speaking queues, with optional StoryFrame spotlight integration.",
+  "description": "Take turns at the table. Players queue up to speak, the GM runs the scene, and everyone gets a chance to talk.",
   "version": "0.1.0",
   "authors": [{ "name": "RoiLeaf" }],
   "compatibility": { "minimum": "13", "verified": "14" },
   "esmodules": ["main.mjs"],
   "styles": ["styles/rp-frame.css"],
   "socket": true,
+  "url": "https://github.com/roi007leaf/rp-frame",
+  "manifest": "https://github.com/roi007leaf/rp-frame/releases/latest/download/module.json",
+  "download": "https://github.com/roi007leaf/rp-frame/releases/download/v0.1.0/rp-frame.zip",
+  "bugs": "https://github.com/roi007leaf/rp-frame/issues",
+  "readme": "https://github.com/roi007leaf/rp-frame/blob/main/README.md",
+  "changelog": "https://github.com/roi007leaf/rp-frame/blob/main/CHANGELOG.md",
+  "license": "LICENSE",
   "relationships": {
     "requires": [
       { "id": "socketlib", "type": "module" }
