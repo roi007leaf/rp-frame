@@ -335,3 +335,18 @@ test('VoiceMic reports levels at its interval and stop cleans up', async () => {
   assert.equal(clock.timers.size, 0);
   mic.stop();
 });
+
+test('stop during an in-flight start leaves the mic closed', async () => {
+  const { service, audio, mic } = setup({ consented: true });
+  const real = audio.mediaDevices.getUserMedia;
+  let release;
+  audio.mediaDevices.getUserMedia = constraints => new Promise(resolve => { release = () => resolve(real(constraints)); });
+  const pending = service.update();
+  await new Promise(resolve => setImmediate(resolve));
+  service.stop();
+  release();
+  await pending;
+  assert.equal(mic.stream, null);
+  assert.equal(audio.tracks.every(track => track.stopped), true);
+  assert.equal(service.status, 'off');
+});

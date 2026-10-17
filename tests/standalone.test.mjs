@@ -9,7 +9,7 @@ for (const scenario of ['absent', 'disabled']) {
     const modules = new Map([['rp-frame', {}]]);
     if (scenario === 'disabled') modules.set('storyframe', { active: false });
     const staleStoryframe = { stateManager: { getState: () => { throw Error('Disabled StoryFrame accessed'); } } };
-    const previous = Object.fromEntries(['Hooks', 'document', 'game', 'ui', 'socketlib', 'setInterval'].map(key => [key, globalThis[key]]));
+    const previous = Object.fromEntries(['Hooks', 'document', 'game', 'ui', 'socketlib', 'setInterval', 'navigator'].map(key => [key, globalThis[key]]));
     try {
       globalThis.Hooks = { once: () => {}, on: () => {}, callAll: () => {} };
       globalThis.document = { body: null };
@@ -18,6 +18,7 @@ for (const scenario of ['absent', 'disabled']) {
         ...(scenario === 'disabled' ? { storyframe: staleStoryframe } : {}),
         settings: {
           register: (_module, key, data) => settings.set(key, structuredClone(data.default)),
+          registerMenu: () => {},
           get: (_module, key) => settings.get(key),
           set: async (_module, key, value) => settings.set(key, structuredClone(value))
         }
@@ -25,6 +26,7 @@ for (const scenario of ['absent', 'disabled']) {
       globalThis.ui = { controls: { render: async () => {} }, notifications: { warn: () => {}, error: error => errors.push(error) } };
       globalThis.socketlib = { registerModule: () => ({ register: () => {}, executeForOthers: (...args) => outbound.push(args) }) };
       globalThis.setInterval = () => 1;
+      Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true, writable: true });
       const runtime = await import(`../main.mjs?standalone=${scenario}`);
       runtime.registerSettings();
       runtime.registerSocket();

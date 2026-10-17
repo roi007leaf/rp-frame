@@ -16,6 +16,16 @@ Enable **RP Frame** and **socketlib** in Manage Modules. StoryFrame is optional.
 
 Default shortcuts, editable in Foundry's **Configure Controls**: **H** requests/leaves the queue, **X** toggles urgent speak, **Space** takes/finishes spotlight (GM: approve/end scene), and **Shift+Space** delays your speaking turn. H cannot remove the active speaker; use Space to finish.
 
+## Voice glow
+
+Optional, off by default. When the GM turns on **RP Frame: voice glow** (world setting), a talking player's character tokens get a soft green glow and their camera tile a green halo. The current RP speaker keeps only the solid speaker ring.
+
+- **Privacy:** each player's browser measures its own mic *volume level* locally. No audio is sent, recorded or stored; only "talking / not talking" and a mic status are shared.
+- **Consent:** the first time it's enabled, each player is asked before the mic is used. **No thanks** opts that player out.
+- **Opt out:** any player can turn on **RP Frame: don't use my mic for voice glow** at any time. **RP Frame: show voice glow** hides glows on your own screen only. GMs see a muted-mic mark on the cameras of players whose mic is off, blocked or unavailable.
+- **Sensitivity:** **RP Frame: voice glow sensitivity → Adjust** opens a live level meter with a threshold slider. Raise the threshold if background noise triggers the glow, lower it if quiet speech doesn't. Changes apply immediately.
+- **Push-to-talk:** voice glow listens to the mic directly, so it reacts to speech even when your voice chat push-to-talk key is up, and Foundry's own A/V mute doesn't silence it. Opt out if that's a problem.
+
 ## StoryFrame integration
 
 With StoryFrame active and **follow StoryFrame spotlight** enabled, RP Frame highlights an existing visible StoryFrame speaker matching the participant's assigned character or user ID. Add characters to StoryFrame first. RP Frame does not create/delete StoryFrame speakers or replace journals. Ending the scene restores the prior spotlight, unless the GM independently selected another speaker.

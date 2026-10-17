@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add optional voice glow: while the GM enables it, talking players' character tokens and camera tiles glow green. Each browser measures only its own mic level locally; only talking / not talking is shared, never audio. Includes player consent, opt-out, a per-client show toggle, a sensitivity meter, and a GM-only muted-mic mark.
+
 ## 0.1.0 (prerelease)
 
 First public prerelease.

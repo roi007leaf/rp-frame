@@ -6,9 +6,16 @@ import { registerRpKeybindings } from './scripts/keybindings.mjs';
 import { SpeakerHighlight, createPixiRing, drawPixiRing } from './scripts/speaker-highlight.mjs';
 import { applyFrame, canEditFrame, getFrame } from './scripts/avatar-frame.mjs';
 import { openFrameEditor } from './scripts/avatar-frame-app.mjs';
+import { DEFAULT_THRESHOLD_DB } from './scripts/voice-detector.mjs';
+import { VoiceRoster } from './scripts/voice-roster.mjs';
+import { browserVoiceMic } from './scripts/voice-mic.mjs';
+import { VoiceService } from './scripts/voice-service.mjs';
+import { VoiceGlow, createPixiGlow, drawPixiGlow, fadeGlow, applyVoiceCameras, voiceGlowIds } from './scripts/voice-glow.mjs';
+import { voiceSensitivityApp } from './scripts/voice-sensitivity-app.mjs';
 
 export const MODULE_ID = 'rp-frame';
-let socket, controller, connection, view, spotlight, highlight, pollTimer;
+let socket, controller, connection, view, spotlight, highlight, pollTimer, voice, voiceGlow;
+const roster = new VoiceRoster();
 const session = Date.now() + Math.random();
 let initialized = false;
 const isAuthority = () => game.user?.isGM && game.users.activeGM?.id === game.user.id;
@@ -18,6 +25,8 @@ const connected = () => isAuthority() ? Boolean(controller?.ready) : Boolean(con
 const report = error => { console.error('RP Frame |', error); ui.notifications?.error(`RP Frame: ${error.message}`); };
 const setting = key => game.settings.get(MODULE_ID, key);
 const sender = context => context?.socketdata?.userId;
+const updateVoice = () => voice?.update().catch(report);
+const CONSENT_HTML = '<p>Your GM turned on voice glow: your character\'s token glows while you talk.</p><p>Foundry will listen to your mic\'s <strong>volume level only</strong>. Nothing is recorded or sent; only "talking / not talking" is shared.</p>';
 const packet = () => ({ session, ready: Boolean(controller?.ready && isAuthority()), state: controller?.state });
 
 /** Apply saved portrait framing to camera tiles and add the align button where allowed. */
@@ -39,11 +48,40 @@ function decorateCameras() {
   }
 }
 
+/** Glow talking players' tokens and cameras (remote roster plus this client's own detector). */
+function renderVoice() {
+  if (!voiceGlow) return;
+  const shown = setting('voiceGlow') && setting('voiceShow');
+  const talkingIds = shown ? roster.talkingIds() : new Set();
+  if (shown && voice?.talking) talkingIds.add(game.user.id);
+  const state = controller?.state;
+  voiceGlow.sync({ talkingIds, state });
+  if (typeof document.querySelectorAll !== 'function') return;
+  applyVoiceCameras(document, voiceGlowIds(talkingIds, state), game.user.isGM && setting('voiceGlow') ? roster.noMicIds() : null);
+}
+
+/** Fade a glow out, then remove it; the token or glow may be destroyed meanwhile. */
+function detachGlow(token, glow) {
+  if (glow.destroyed) return;
+  fadeGlow(glow, 1, 0, 150, () => {
+    if (!token.destroyed) token.removeChild?.(glow);
+    if (!glow.destroyed) glow.destroy();
+  });
+}
+
+function createGlow() {
+  const glow = createPixiGlow();
+  glow.alpha = 0;
+  fadeGlow(glow, 0, 1, 150);
+  return glow;
+}
+
 function refresh() {
   decorateCameras();
   if (!controller) return;
   view?.render(controller.state);
   highlight?.sync(controller.state);
+  renderVoice();
   void ui.controls?.render?.({ reset: true });
 }
 
@@ -63,6 +101,13 @@ export function registerSettings() {
   register('tokenHighlight', { name: 'RP Frame: highlight speaker token', hint: 'Draw a green ring around the speaking player\'s character tokens.', scope: 'client', config: true, type: Boolean, default: true, onChange: refresh });
   register('linkSpotlight', { name: 'RP Frame: follow StoryFrame spotlight', hint: 'When optional StoryFrame is enabled, highlight existing speakers matching each player character. Restore the previous spotlight when the RP scene ends.', scope: 'world', config: true, type: Boolean, default: true, onChange: () => { if (controller) void spotlight?.sync(controller.state); } });
   register('stopForCombat', { name: 'RP Frame: end scene when combat starts', scope: 'world', config: true, type: Boolean, default: true });
+  register('voiceGlow', { name: 'RP Frame: voice glow', hint: 'Players\' character tokens and camera tiles glow while they talk. Each player\'s browser measures their own mic level; no audio is sent or recorded.', scope: 'world', config: true, type: Boolean, default: false, onChange: () => { updateVoice(); renderVoice(); } });
+  register('voiceOptOut', { name: 'RP Frame: don\'t use my mic for voice glow', scope: 'client', config: true, type: Boolean, default: false, onChange: updateVoice });
+  register('voiceShow', { name: 'RP Frame: show voice glow', scope: 'client', config: true, type: Boolean, default: true, onChange: renderVoice });
+  register('voiceConsent', { scope: 'client', config: false, type: Boolean, default: false });
+  register('voiceThreshold', { scope: 'client', config: false, type: Number, default: DEFAULT_THRESHOLD_DB });
+  const sensitivity = voiceSensitivityApp();
+  if (sensitivity) game.settings.registerMenu(MODULE_ID, 'voiceSensitivity', { name: 'RP Frame: voice glow sensitivity', label: 'Adjust', icon: 'fa-solid fa-microphone-lines', restricted: false, type: sensitivity });
 }
 
 export function registerKeybindings() {
@@ -102,6 +147,11 @@ export function registerSocket() {
   });
   socket.register('pong', function(nonce, data) {
     if (connection?.accept(sender(this), data, game.users.activeGM?.id, nonce)) controller?.accept(data.state);
+  });
+  // Only {talking, mic} ever arrives here; socketlib authenticates the sender, not the payload.
+  socket.register('voice', function(payload) {
+    const from = sender(this);
+    if (from && game.users.get(from) && roster.update(from, payload, Date.now())) renderVoice();
   });
   socket.register('unavailable', function(previousSession) {
     connection?.unavailable(sender(this), previousSession);
@@ -143,6 +193,26 @@ export async function initialize() {
     tokens: () => globalThis.canvas?.tokens?.placeables ?? [], users: () => game.users,
     enabled: () => setting('tokenHighlight'), createRing: createPixiRing, drawRing: drawPixiRing
   });
+  voiceGlow = new VoiceGlow({
+    tokens: () => globalThis.canvas?.tokens?.placeables ?? [], users: () => game.users,
+    enabled: () => setting('voiceGlow') && setting('voiceShow'),
+    createRing: createGlow, drawRing: drawPixiGlow, detachRing: detachGlow
+  });
+  voice = new VoiceService({
+    enabled: () => setting('voiceGlow'), optedOut: () => setting('voiceOptOut'), consented: () => setting('voiceConsent'),
+    askConsent: async () => Boolean(await foundry.applications.api.DialogV2.confirm({
+      window: { title: 'Voice glow' }, content: CONSENT_HTML,
+      yes: { label: 'Allow' }, no: { label: 'No thanks' }, rejectClose: false
+    })),
+    setOptOut: value => game.settings.set(MODULE_ID, 'voiceOptOut', value),
+    setConsent: () => game.settings.set(MODULE_ID, 'voiceConsent', true),
+    threshold: () => setting('voiceThreshold'), mic: browserVoiceMic(),
+    // Local transitions re-render so the speaker sees their own glow.
+    send: payload => { socket.executeForOthers('voice', payload); renderVoice(); },
+    now: () => Date.now(), setInterval: (fn, ms) => globalThis.setInterval(fn, ms), clearInterval: id => globalThis.clearInterval(id)
+  });
+  // Browsers may start the AudioContext suspended until the first user gesture.
+  for (const type of ['pointerdown', 'keydown']) document.addEventListener?.(type, () => voice.mic.resume(), { once: true, capture: true });
   controller = new SceneController({
     isAuthority, isPlayer, inCombat: () => setting('stopForCombat') && inCombat(), now: () => Date.now(),
     load: () => setting('scene'), save: data => game.settings.set(MODULE_ID, 'scene', data),
@@ -157,6 +227,7 @@ export async function initialize() {
   };
   if (game.modules.get('storyframe')?.active && game.storyframe) game.storyframe.rpFrame = api;
   const poll = () => {
+    if (roster.prune(Date.now())) renderVoice();
     if (!isAuthority()) {
       controller.authority = false;
       connection.poll(game.users.activeGM?.id);
@@ -170,6 +241,7 @@ export async function initialize() {
     ui.notifications.warn('RP Frame: disable Raise My Hand\'s queue to avoid two RP scene systems.');
   }
   refresh();
+  updateVoice();
 }
 
 export function tokenControls(controls) {
@@ -207,10 +279,12 @@ Hooks.once('ready', initialize);
 Hooks.on('getSceneControlButtons', tokenControls);
 for (const hook of ['renderPlayers', 'renderCameraViews', 'renderCameraPopout', 'canvasReady']) Hooks.on(hook, refresh);
 Hooks.on('updateUser', refresh);
-Hooks.on('canvasTearDown', () => highlight?.reset());
-Hooks.on('refreshToken', token => highlight?.redraw(token));
+Hooks.on('canvasTearDown', () => { highlight?.reset(); voiceGlow?.reset(); });
+Hooks.on('refreshToken', token => { highlight?.redraw(token); voiceGlow?.redraw(token); });
 Hooks.on('createToken', () => refresh());
-Hooks.on('userConnected', () => {
+Hooks.on('userConnected', (user, isConnected) => {
+  if (!isConnected) { if (roster.remove(user?.id)) renderVoice(); }
+  else if (setting('voiceGlow')) voice?.announce();
   if (!controller?.ready) return;
   if (!isAuthority()) controller.authority = false;
   if (!isAuthority()) connection.poll(game.users.activeGM?.id, true);
@@ -221,5 +295,6 @@ Hooks.on('updateCombat', combat => {
 });
 globalThis.addEventListener?.('pagehide', () => {
   globalThis.clearInterval(pollTimer);
+  voice?.stop();
   if (isAuthority() && controller?.ready) socket?.executeForOthers('unavailable', session);
 });

@@ -66,3 +66,15 @@
 .camera-view:not(.rp-frame-voice) { transition: box-shadow .2s; }
 /* Bottom-left, opposite the bottom-right badge: GM-only mark for players whose mic is unavailable. */
 .camera-view > .rp-frame-nomic { position: absolute; z-index: 5; left: 6px; bottom: 32px; color: #868e96; pointer-events: none; }
+/* Voice glow sensitivity window. */
+.rp-frame-voice-editor { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.rp-frame-voice-editor p { margin: 0; }
+.rp-frame-voice-hint { font-size: 12px; opacity: .75; }
+.rp-frame-voice-note { font-weight: bold; }
+.rp-frame-voice-meter { position: relative; height: 14px; border-radius: 7px; background: rgb(0 0 0 / 35%); overflow: hidden; }
+.rp-frame-voice-level { height: 100%; width: 0; background: #868e96; transition: width 50ms linear; }
+.rp-frame-voice-meter.talking .rp-frame-voice-level { background: #51cf66; }
+.rp-frame-voice-marker { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #e8ffe9; }
+.rp-frame-voice-threshold { display: flex; align-items: center; gap: 8px; }
+.rp-frame-voice-threshold input { flex: 1; }
+.rp-frame-voice-threshold output { min-width: 4.5em; text-align: right; }

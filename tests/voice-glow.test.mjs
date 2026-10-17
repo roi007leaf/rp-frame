@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { voiceGlowIds, VoiceGlow, applyVoiceCameras } from '../scripts/voice-glow.mjs';
+import { voiceGlowIds, VoiceGlow, applyVoiceCameras, fadeGlow } from '../scripts/voice-glow.mjs';
 
 const users = new Map([
   ['a', { id: 'a', character: { id: 'amiri' } }],
@@ -97,4 +97,47 @@ test('cameras toggle voice class and no-mic marks', () => {
   applyVoiceCameras(root, new Set(), new Set(['b']));
   applyVoiceCameras(root, new Set(), null);
   assert.equal(b.kids.length, 0, 'null noMic leaves no marks');
+});
+
+function fakeTicker() {
+  const ticker = { deltaMS: 50, callbacks: new Set(), add(fn) { this.callbacks.add(fn); }, remove(fn) { this.callbacks.delete(fn); },
+    tick() { for (const fn of [...this.callbacks]) fn(); } };
+  globalThis.canvas = { app: { ticker } };
+  return ticker;
+}
+
+test('fade tweens alpha then calls done', () => {
+  const ticker = fakeTicker();
+  const glow = { alpha: 1 };
+  let done = 0;
+  fadeGlow(glow, 0, 1, 150, () => done++);
+  assert.equal(glow.alpha, 0);
+  ticker.tick();
+  assert.ok(glow.alpha > 0 && glow.alpha < 1);
+  ticker.tick(); ticker.tick();
+  assert.equal(glow.alpha, 1);
+  assert.equal(done, 1);
+  assert.equal(ticker.callbacks.size, 0);
+});
+
+test('fade stops without done when the glow is destroyed mid-fade', () => {
+  const ticker = fakeTicker();
+  const glow = { alpha: 1, destroyed: false };
+  let done = 0;
+  fadeGlow(glow, 1, 0, 150, () => done++);
+  ticker.tick();
+  glow.destroyed = true;
+  ticker.tick();
+  assert.equal(ticker.callbacks.size, 0);
+  ticker.tick();
+  assert.equal(done, 0);
+});
+
+test('fade without a canvas ticker jumps to the end', () => {
+  globalThis.canvas = undefined;
+  const glow = { alpha: 0 };
+  let done = 0;
+  assert.doesNotThrow(() => fadeGlow(glow, 0, 1, 150, () => done++));
+  assert.equal(glow.alpha, 1);
+  assert.equal(done, 1);
 });

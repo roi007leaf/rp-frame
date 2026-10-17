@@ -29,12 +29,18 @@ export function drawPixiGlow(glow, token) {
   }
 }
 
-/** Tween alpha via the canvas ticker; calls done when finished. */
+/** Tween alpha via the canvas ticker; calls done when finished. Stops silently if the glow is destroyed. */
 export function fadeGlow(glow, from, to, ms = 150, done) {
-  const ticker = canvas.app.ticker;
+  const ticker = globalThis.canvas?.app?.ticker;
+  if (!ticker) {
+    glow.alpha = to;
+    done?.();
+    return;
+  }
   let elapsed = 0;
   glow.alpha = from;
   const step = () => {
+    if (glow.destroyed) return void ticker.remove(step);
     elapsed += ticker.deltaMS;
     const t = Math.min(1, elapsed / ms);
     glow.alpha = from + (to - from) * t;

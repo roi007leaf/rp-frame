@@ -57,3 +57,13 @@ export class VoiceMic {
     if (this.context?.state === 'suspended') this.context.resume().catch(() => {});
   }
 }
+
+/** VoiceMic on the browser's own APIs; missing mediaDevices or AudioContext resolve 'unavailable'. */
+export function browserVoiceMic() {
+  return new VoiceMic({
+    mediaDevices: globalThis.navigator?.mediaDevices,
+    createAudioContext: () => new (globalThis.AudioContext ?? globalThis.webkitAudioContext)(),
+    setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+    clearInterval: id => globalThis.clearInterval(id)
+  });
+}

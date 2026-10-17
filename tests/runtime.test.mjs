@@ -2,16 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-const hooks = new Map(), settings = new Map(), handlers = new Map(), outbound = [];
+const hooks = new Map(), onHooks = new Map(), settings = new Map(), values = new Map(), menus = new Map(), handlers = new Map(), outbound = [];
 let saved = {}, authority = 'gm', timer;
-const users = new Map([['gm',{id:'gm',isGM:true}],['other',{id:'other',isGM:true}],['a',{id:'a',isGM:false}],['b',{id:'b',isGM:false}]]);
+const users = new Map([['gm',{id:'gm',isGM:true}],['other',{id:'other',isGM:true}],['a',{id:'a',isGM:false}],['b',{id:'b',isGM:false}],['player',{id:'player',isGM:false}]]);
 Object.defineProperty(users,'activeGM',{get:()=>users.get(authority)});
-globalThis.Hooks = { once:(name,callback)=>hooks.set(name,callback), on:()=>{}, callAll:()=>{} };
-globalThis.document = { body:null };
+globalThis.Hooks = { once:(name,callback)=>hooks.set(name,callback), on:(name,callback)=>onHooks.set(name,[...(onHooks.get(name)??[]),callback]), callAll:()=>{} };
+let cameras = [];
+globalThis.document = { body:null, querySelectorAll:selector=>selector==='.camera-view[data-user]' ? cameras : [],
+  createElement:()=>({dataset:{},setAttribute(){},addEventListener(){}}) };
+// No mic in this environment: voice glow must stay quiet rather than throw.
+Object.defineProperty(globalThis,'navigator',{value:{},configurable:true,writable:true});
+globalThis.foundry = { applications:{ api:{ ApplicationV2:class {} } } };
 globalThis.game = {
   ready:false, user:users.get('gm'), users, combats:[],scenes:{current:{id:'scene'}},
   modules:new Map([['storyframe',{active:true}],['rp-frame',{}]]),storyframe:{},
-  settings:{register:(_module,key,value)=>settings.set(key,value),get:(_module,key)=>key==='scene' ? saved : settings.get(key)?.default,set:async(_module,key,value)=>{if(key==='scene')saved=structuredClone(value);}}
+  settings:{register:(_module,key,value)=>settings.set(key,value),registerMenu:(_module,key,value)=>menus.set(key,value),
+    get:(_module,key)=>key==='scene' ? saved : values.has(key) ? values.get(key) : settings.get(key)?.default,
+    set:async(_module,key,value)=>{if(key==='scene')saved=structuredClone(value);else values.set(key,value);}}
 };
 globalThis.ui = {controls:{render:async()=>{}},notifications:{warn:()=>{},error:error=>{throw Error(error);}}};
 globalThis.socketlib = { registerModule:module=>{assert.equal(module,'rp-frame');return {
@@ -125,4 +132,57 @@ test('init registers original shortcuts under RP Frame namespace; GM Space uses 
   assert.equal(bindings.get('snatch-spotlight').onDown({ event: {} }), true);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(saved.active, false);
+});
+
+function camera(userId) {
+  const classes = new Set();
+  return { dataset:{user:userId}, classes, querySelector:()=>null, append(){},
+    classList:{ toggle:(name,force)=>force ? classes.add(name) : classes.delete(name), contains:name=>classes.has(name) },
+    ownerDocument:{ createElement:()=>({ remove(){} }) } };
+}
+const fire = (name, ...args) => { for (const callback of onHooks.get(name) ?? []) callback(...args); };
+const glowing = () => cameras.filter(tile=>tile.classes.has('rp-frame-voice')).map(tile=>tile.dataset.user);
+
+test('settings registered', () => {
+  for (const key of ['voiceGlow','voiceOptOut','voiceShow','voiceConsent','voiceThreshold']) assert.ok(settings.has(key), key);
+  assert.equal(settings.get('voiceGlow').scope,'world');
+  assert.equal(settings.get('voiceGlow').default,false);
+  assert.equal(settings.get('voiceThreshold').default,-45);
+  assert.equal(settings.get('voiceConsent').config,false);
+  const menu = menus.get('voiceSensitivity');
+  assert.ok(menu);
+  assert.equal(menu.restricted,false);
+  assert.equal(typeof menu.type,'function');
+});
+
+test('voice socket from another user renders glow', () => {
+  cameras = [camera('player'), camera('a')];
+  values.set('voiceGlow',true);
+  handlers.get('voice').call(context('player'),{talking:true,mic:'ok'});
+  assert.deepEqual(glowing(),['player']);
+  handlers.get('voice').call(context('player'),{talking:false,mic:'ok'});
+  assert.deepEqual(glowing(),[]);
+});
+
+test('world switch off clears all glows', () => {
+  cameras = [camera('player'), camera('a')];
+  values.set('voiceGlow',true);
+  handlers.get('voice').call(context('player'),{talking:true,mic:'ok'});
+  handlers.get('voice').call(context('a'),{talking:true,mic:'ok'});
+  assert.deepEqual(glowing(),['player','a']);
+  values.set('voiceGlow',false);
+  fire('renderPlayers');
+  assert.deepEqual(glowing(),[]);
+});
+
+test('disconnected talker stops glowing', () => {
+  cameras = [camera('player')];
+  values.set('voiceGlow',true);
+  handlers.get('voice').call(context('player'),{talking:true,mic:'ok'});
+  fire('renderPlayers');
+  assert.deepEqual(glowing(),['player']);
+  fire('userConnected',users.get('player'),false);
+  assert.deepEqual(glowing(),[]);
+  values.delete('voiceGlow');
+  cameras = [];
 });

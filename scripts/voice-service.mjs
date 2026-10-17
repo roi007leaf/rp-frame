@@ -13,6 +13,7 @@ export class VoiceService {
   #consented = false;
   #heartbeat = null;
   #pending = null;
+  #stops = 0;
 
   constructor(host) {
     this.#host = host;
@@ -40,11 +41,13 @@ export class VoiceService {
   }
 
   stop() {
+    this.#stops++;
     this.#halt(MIC.off);
   }
 
   async #update() {
     const host = this.#host;
+    const stops = this.#stops;
     if (!host.enabled()) return void this.#halt(MIC.off);
     if (host.optedOut()) {
       if (!this.#halt(MIC.off)) this.#send();
@@ -61,7 +64,10 @@ export class VoiceService {
       await host.setConsent();
     }
     this.#consented = true;
+    if (stops !== this.#stops) return;
     const result = await host.mic.start(db => this.#level(db), () => this.#ended());
+    // stop() during the await (e.g. pagehide) wins: close what just opened.
+    if (stops !== this.#stops) return void this.#halt(MIC.off);
     if (!host.enabled() || host.optedOut()) return this.#update();
     this.#status = result;
     this.#running = result === MIC.ok;
