@@ -61,3 +61,8 @@
 /* Align-portrait button: top-right under the status icons, shown on hover like Foundry's controls. */
 .camera-view > .rp-frame-avatar-btn { position: absolute; z-index: 6; top: 34px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .15s; }
 .camera-view:hover > .rp-frame-avatar-btn, .camera-view > .rp-frame-avatar-btn:focus-visible { opacity: 1; }
+/* Voice glow: soft green halo on a talking player's camera tile (the RP-turn holder keeps the solid outline). */
+.camera-view.rp-frame-voice { box-shadow: 0 0 18px 6px rgb(81 207 102 / 40%); transition: box-shadow .2s; }
+.camera-view:not(.rp-frame-voice) { transition: box-shadow .2s; }
+/* Bottom-left, opposite the bottom-right badge: GM-only mark for players whose mic is unavailable. */
+.camera-view > .rp-frame-nomic { position: absolute; z-index: 5; left: 6px; bottom: 32px; color: #868e96; pointer-events: none; }

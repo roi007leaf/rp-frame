@@ -3,24 +3,37 @@ export function speakingUserId(state) {
   return state?.active && state.speaker ? state.speaker : null;
 }
 
+/** Canvas tokens of the given users' assigned characters. */
+export function characterTokens(userIds, users, tokens) {
+  const characterIds = new Set();
+  for (const id of userIds) {
+    const characterId = users.get(id)?.character?.id;
+    if (characterId) characterIds.add(characterId);
+  }
+  if (!characterIds.size) return [];
+  return tokens.filter(token => characterIds.has(token.actor?.id ?? token.document?.actorId));
+}
+
 /** Canvas tokens of the speaking user's assigned character. */
 export function speakerTokens(state, users, tokens) {
-  const characterId = users.get(speakingUserId(state))?.character?.id;
-  if (!characterId) return [];
-  return tokens.filter(token => (token.actor?.id ?? token.document?.actorId) === characterId);
+  const id = speakingUserId(state);
+  return id ? characterTokens([id], users, tokens) : [];
 }
 
 /** Green ring around the speaker's tokens; rendering is injected so the logic stays testable. */
 export class SpeakerHighlight {
   constructor(host) { this.host = host; this.rings = new Map(); }
 
-  sync(state) {
-    const targets = this.host.enabled() ? speakerTokens(state, this.host.users(), this.host.tokens()) : [];
+  /** Tokens that should carry a ring for this input; subclasses override. */
+  targets(state) { return speakerTokens(state, this.host.users(), this.host.tokens()); }
+
+  sync(input) {
+    const targets = this.host.enabled() ? this.targets(input) : [];
     const keep = new Set(targets);
     for (const [token, ring] of this.rings) {
       if (keep.has(token)) continue;
-      token.removeChild?.(ring);
-      ring.destroy?.();
+      if (this.host.detachRing) this.host.detachRing(token, ring);
+      else { token.removeChild?.(ring); ring.destroy?.(); }
       this.rings.delete(token);
     }
     for (const token of targets) {
