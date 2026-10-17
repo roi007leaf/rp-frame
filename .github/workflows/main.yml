@@ -1,0 +1,172 @@
+# GitHub Actions workflow for creating a new FoundryVTT module release.
+# Adapted from the PF2E Visioner release pipeline.
+#
+# How to release:
+#   1. Add the new version's notes to CHANGELOG.md and push to main.
+#   2. Publish a GitHub release with a tag like "v0.2.0" (tick "pre-release"
+#      if it isn't stable yet).
+#   3. This workflow stamps the version and download URL into module.json,
+#      attaches module.json + rp-frame.zip to the release, and commits the
+#      updated module.json back to main.
+#
+# Update link: module.json's "manifest" points at the raw module.json on main,
+# which always describes the newest release (prereleases included). Installs
+# made from that URL update without needing a new link. GitHub's
+# releases/latest/download URL is NOT used because it skips prereleases.
+#
+# Stable (non-prerelease) releases are also published to foundryvtt.com,
+# which needs the FVTT_API_TOKEN repository secret and the package to exist
+# at https://foundryvtt.com/admin.
+#
+name: RP Frame Release Pipeline
+
+env:
+  release_module_url: 'https://github.com/${{github.repository}}/releases/download/${{github.event.release.tag_name}}/rp-frame.zip'
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish to Foundry (for example v1.2.2)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Ask Foundry to validate only, without publishing'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Check syntax
+        run: for f in main.mjs scripts/*.mjs; do node --check "$f"; done
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: [test]
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'release' && 'main' || github.ref }}
+
+      - name: Validate Module Manifest
+        run: |
+          jq empty module.json
+          jq -e '.id == "rp-frame" and (.version | type) == "string"' module.json > /dev/null
+          echo "Validated manifest JSON"
+
+      # Expects tags like "v1.2.3" or "1.2.3".
+      - name: Stamp Release Version Into Manifest
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          jq --arg v "$version" --arg d "${{ env.release_module_url }}" \
+            '.version = $v | .download = $d' module.json > module.tmp
+          mv module.tmp module.json
+          cat module.json
+
+      - name: Create Module Archive
+        if: github.event_name == 'release'
+        run: |
+          zip --recurse-paths ./rp-frame.zip \
+            module.json main.mjs README.md CHANGELOG.md LICENSE \
+            scripts/ styles/ lang/ templates/ assets/
+
+      - name: Update Release With Files
+        if: github.event_name == 'release'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          name: ${{ github.event.release.name }}
+          draft: ${{ github.event.release.unpublished }}
+          prerelease: ${{ github.event.release.prerelease }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: './module.json, ./rp-frame.zip'
+          tag: ${{ github.event.release.tag_name }}
+          body: ${{ github.event.release.body }}
+
+      # Keeps the update link (raw module.json on main) pointing at this release.
+      - name: Point Main Manifest At This Release
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if git diff --quiet -- module.json; then
+            echo "module.json on main already points at $TAG"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: point manifest at $TAG" -- module.json
+          git push origin HEAD:main
+
+  # Publish to Foundry VTT (only after successful build, excluding pre-releases)
+  publish-to-foundry:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: ${{ always() && (((github.event_name == 'release' && github.event.release.prerelease != true) && needs.build.result == 'success') || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Check The Release Exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' | grep -qx module.json \
+            || { echo "::error::Release $TAG has no module.json asset; publish it on GitHub first."; exit 1; }
+
+      # Foundry revokes the API key when a package publishes too often: at most one release per 24 hours.
+      - name: Allow One Foundry Release Per 24 Hours
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        run: |
+          since=$(date -u -d '24 hours ago' +%s)
+          gh api "repos/${{ github.repository }}/actions/workflows/main.yml/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.id != ${{ github.run_id }}) | "\(.id) \(.created_at)"' |
+          while read -r id created; do
+            [ "$(date -u -d "$created" +%s)" -lt "$since" ] && continue
+            published=$(gh api "repos/${{ github.repository }}/actions/runs/$id/jobs" \
+              --jq '[.jobs[] | select(.name == "publish-to-foundry" and .conclusion == "success")] | length')
+            if [ "$published" -gt 0 ]; then
+              echo "::error::Foundry already received a release from run $id at $created (within 24 hours). $TAG stays on GitHub only; its update link works. Publish it later with Run workflow (Publish to Foundry)."
+              exit 1
+            fi
+          done
+
+      - name: Publish to Foundry VTT
+        uses: JamesIves/fetch-api-data-action@v2
+        with:
+          endpoint: https://foundryvtt.com/_api/packages/release_version/
+          configuration: '{ "method": "POST", "headers": { "Content-Type": "application/json", "Authorization": "${{ secrets.FVTT_API_TOKEN }}" }, "body": { "id": "rp-frame", "dry-run": ${{ github.event_name == ''workflow_dispatch'' && inputs.dry_run || false }}, "release": { "version": "${{ github.event_name == ''workflow_dispatch'' && inputs.tag || github.event.release.tag_name }}", "manifest": "https://github.com/${{github.repository}}/releases/download/${{ github.event_name == ''workflow_dispatch'' && inputs.tag || github.event.release.tag_name }}/module.json", "notes": "https://github.com/${{github.repository}}/blob/main/CHANGELOG.md", "compatibility": { "minimum": "13", "verified": "14", "maximum": "" } } } }'
